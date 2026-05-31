@@ -1,0 +1,1319 @@
+use std::path::PathBuf;
+use std::sync::mpsc::Sender;
+
+use crate::data::cache::Cache;
+use crate::data::config::Config;
+use crate::data::models::*;
+use crate::engine::recommender::{self, Recommendation};
+use crate::engine::weakness;
+use crate::engine::workspace;
+use crate::platforms::codeforces::CodeforcesClient;
+use crate::platforms::cses::CsesClient;
+use crate::platforms::PlatformClient;
+use crate::ui::theme::Theme;
+
+/// Messages sent from the background refresh task back to the UI thread.
+pub enum RefreshMsg {
+    Status(String),
+    Contests(Vec<Contest>),
+    Done,
+}
+
+/// Result of the local test runner, sent from the background test task.
+pub enum TestMsg {
+    Done(Vec<TestResult>),
+    Failed(String),
+}
+
+/// Persisted CSES progress (solved/attempted task ids) from a logged-in session.
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+pub struct CsesProgress {
+    pub solved: Vec<String>,
+    pub attempted: Vec<String>,
+}
+
+fn cses_progress_path() -> PathBuf {
+    Config::data_dir().join("cses_progress.json")
+}
+
+pub fn load_cses_progress() -> CsesProgress {
+    std::fs::read_to_string(cses_progress_path())
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .or_else(|| {
+            dirs::home_dir().and_then(|h| {
+                std::fs::read_to_string(h.join(".cpos-vscode/cses-progress.json"))
+                    .ok()
+                    .and_then(|s| serde_json::from_str(&s).ok())
+            })
+        })
+        .unwrap_or_default()
+}
+
+pub fn save_cses_progress(p: &CsesProgress) {
+    let _ = std::fs::create_dir_all(Config::data_dir());
+    if let Ok(s) = serde_json::to_string_pretty(p) {
+        let _ = std::fs::write(cses_progress_path(), &s);
+        if let Some(home) = dirs::home_dir() {
+            let vscode_dir = home.join(".cpos-vscode");
+            let _ = std::fs::create_dir_all(&vscode_dir);
+            let _ = std::fs::write(vscode_dir.join("cses-progress.json"), s);
+        }
+    }
+}
+
+/// Everything the UI thread needs after the user starts working on a problem:
+/// where the solution lives and which page to open in the browser.
+pub struct StartedProblem {
+    pub problem: Problem,
+    pub solution_path: PathBuf,
+    pub url: String,
+    pub already_existed: bool,
+}
+
+/// A submission action prepared for the browser: the submit page to open and
+/// the source code to drop onto the clipboard.
+pub struct SubmitAction {
+    pub submit_url: String,
+    pub code: String,
+    /// Human-readable language to pick on the submit page (e.g. "C++").
+    pub language: String,
+    /// The exact file whose contents are being submitted.
+    pub file_name: String,
+}
+
+/// A friendly language name for the user's configured language key. Used to
+/// tell the user which language to select on the submit page.
+pub fn language_display(lang: &str) -> String {
+    match lang {
+        "c" => "C".to_string(),
+        "cpp" => "C++".to_string(),
+        "python" => "Python 3".to_string(),
+        "pypy" => "PyPy 3".to_string(),
+        "java" => "Java".to_string(),
+        "kotlin" => "Kotlin".to_string(),
+        "rust" => "Rust".to_string(),
+        "go" => "Go".to_string(),
+        "csharp" => "C#".to_string(),
+        "javascript" => "JavaScript".to_string(),
+        "ruby" => "Ruby".to_string(),
+        "haskell" => "Haskell".to_string(),
+        "pascal" => "Pascal".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// Languages CPOS ships compile/run commands for, in a friendly display order.
+/// Used by the setup wizard and config picker.
+pub const LANGUAGES: [&str; 13] = [
+    "cpp", "python", "java", "c", "rust", "go", "kotlin", "csharp", "javascript", "ruby",
+    "haskell", "pascal", "pypy",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tab {
+    Dashboard,
+    Problems,
+    Contests,
+    Analytics,
+    Recommend,
+    Config,
+}
+
+impl Tab {
+    pub const ALL: [Tab; 6] = [
+        Tab::Dashboard,
+        Tab::Problems,
+        Tab::Contests,
+        Tab::Analytics,
+        Tab::Recommend,
+        Tab::Config,
+    ];
+
+    pub fn label(&self) -> &str {
+        match self {
+            Tab::Dashboard => "Dashboard",
+            Tab::Problems => "Problems",
+            Tab::Contests => "Contests",
+            Tab::Analytics => "Analytics",
+            Tab::Recommend => "Recommend",
+            Tab::Config => "Config",
+        }
+    }
+
+    pub fn next(&self) -> Tab {
+        let idx = Tab::ALL.iter().position(|t| t == self).unwrap_or(0);
+        Tab::ALL[(idx + 1) % Tab::ALL.len()]
+    }
+
+    pub fn prev(&self) -> Tab {
+        let idx = Tab::ALL.iter().position(|t| t == self).unwrap_or(0);
+        Tab::ALL[(idx + Tab::ALL.len() - 1) % Tab::ALL.len()]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformFilter {
+    All,
+    Single(Platform),
+}
+
+impl PlatformFilter {
+    pub fn label(&self) -> &str {
+        match self {
+            PlatformFilter::All => "All",
+            PlatformFilter::Single(Platform::Codeforces) => "Codeforces",
+            PlatformFilter::Single(Platform::Cses) => "CSES",
+            PlatformFilter::Single(Platform::AtCoder) => "AtCoder",
+        }
+    }
+
+    pub fn next(&self) -> PlatformFilter {
+        match self {
+            PlatformFilter::All => PlatformFilter::Single(Platform::Codeforces),
+            PlatformFilter::Single(Platform::Codeforces) => PlatformFilter::Single(Platform::Cses),
+            PlatformFilter::Single(Platform::Cses) => PlatformFilter::All,
+            PlatformFilter::Single(Platform::AtCoder) => PlatformFilter::All,
+        }
+    }
+}
+
+pub struct App {
+    pub running: bool,
+    pub active_tab: Tab,
+    pub config: Config,
+    pub theme: Theme,
+
+    pub problems: Vec<Problem>,
+    pub filtered_problems: Vec<Problem>,
+    pub problem_selected: usize,
+    pub platform_filter: PlatformFilter,
+    pub search_query: String,
+    pub search_active: bool,
+    pub tag_filter: Option<String>,
+    /// When set, show only the problems of this Codeforces contest (by id prefix).
+    pub contest_filter: Option<String>,
+    pub rating_min: Option<u32>,
+    pub rating_max: Option<u32>,
+    pub rating_input_active: bool,
+    pub rating_input_buf: String,
+    pub url_input_active: bool,
+    pub url_input_buf: String,
+
+    pub submissions: Vec<Submission>,
+    pub rating_history: Vec<RatingChange>,
+    pub tag_stats: Vec<TagStats>,
+    /// CSES solved/attempted task ids, read from a logged-in session.
+    pub cses_solved: std::collections::HashSet<String>,
+    pub cses_attempted: std::collections::HashSet<String>,
+
+    pub recommendations: Vec<Recommendation>,
+    pub recommend_selected: usize,
+    pub contests: Vec<Contest>,
+    pub contest_selected: usize,
+
+    pub status_message: String,
+    pub loading: bool,
+    pub spinner_frame: usize,
+    pub refresh_rx: Option<std::sync::mpsc::Receiver<RefreshMsg>>,
+
+    // Local test runner state.
+    pub testing: bool,
+    pub test_rx: Option<std::sync::mpsc::Receiver<TestMsg>>,
+    pub test_results: Option<Vec<TestResult>>,
+    pub test_error: Option<String>,
+    pub show_test_popup: bool,
+
+    // Background status channel for non-blocking tasks (e.g. sample fetch).
+    pub aux_rx: Option<std::sync::mpsc::Receiver<String>>,
+
+    // Browser companion capture channel.
+    pub capture_rx: Option<std::sync::mpsc::Receiver<crate::engine::capture::CaptureMsg>>,
+    pub capture_port: Option<u16>,
+    pub capture_server: Option<crate::engine::capture::CaptureServer>,
+
+    pub config_selected: usize,
+    pub config_editing: bool,
+    pub config_edit_buf: String,
+
+    // First-run setup wizard.
+    pub setup_active: bool,
+    pub setup_step: SetupStep,
+    pub setup_handle: String,
+    pub setup_lang: String,
+    pub setup_template: String,
+    pub setup_cses: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupStep {
+    Handle,
+    Language,
+    Template,
+    Cses,
+}
+
+impl App {
+    pub fn new(config: Config) -> Self {
+        let theme = Theme::from_name(&config.theme);
+        App {
+            running: true,
+            active_tab: Tab::Dashboard,
+            theme,
+            config,
+            problems: Vec::new(),
+            filtered_problems: Vec::new(),
+            problem_selected: 0,
+            platform_filter: PlatformFilter::All,
+            search_query: String::new(),
+            search_active: false,
+            tag_filter: None,
+            contest_filter: None,
+            rating_min: None,
+            rating_max: None,
+            rating_input_active: false,
+            rating_input_buf: String::new(),
+            url_input_active: false,
+            url_input_buf: String::new(),
+            submissions: Vec::new(),
+            rating_history: Vec::new(),
+            tag_stats: Vec::new(),
+            cses_solved: std::collections::HashSet::new(),
+            cses_attempted: std::collections::HashSet::new(),
+            recommendations: Vec::new(),
+            recommend_selected: 0,
+            contests: Vec::new(),
+            contest_selected: 0,
+            status_message: "Press 'r' to sync with Codeforces and CSES".to_string(),
+            loading: false,
+            spinner_frame: 0,
+            refresh_rx: None,
+            testing: false,
+            test_rx: None,
+            test_results: None,
+            test_error: None,
+            show_test_popup: false,
+            aux_rx: None,
+            capture_rx: None,
+            capture_port: None,
+            capture_server: None,
+            config_selected: 0,
+            config_editing: false,
+            config_edit_buf: String::new(),
+            setup_active: false,
+            setup_step: SetupStep::Handle,
+            setup_handle: String::new(),
+            setup_lang: "cpp".to_string(),
+            setup_template: String::new(),
+            setup_cses: String::new(),
+        }
+    }
+
+    /// Returns true if this looks like a first run (no Codeforces handle set),
+    /// in which case the caller should open the setup wizard.
+    pub fn needs_setup(&self) -> bool {
+        self.config.cf_handle().is_none_or(|h| h.trim().is_empty())
+    }
+
+    /// Open the first-run setup wizard, pre-filling from any existing config.
+    pub fn begin_setup(&mut self) {
+        self.setup_active = true;
+        self.setup_step = SetupStep::Handle;
+        self.setup_handle = self.config.cf_handle().unwrap_or("").to_string();
+        self.setup_lang = self.config.default_language.clone();
+        self.setup_template.clear();
+        self.setup_cses = self.config.cses_session.clone().unwrap_or_default();
+    }
+
+    /// Cycle the setup language selection through the supported list.
+    /// `delta` of +1 moves forward, -1 backward.
+    pub fn setup_cycle_lang(&mut self, delta: i32) {
+        let cur = LANGUAGES
+            .iter()
+            .position(|l| *l == self.setup_lang)
+            .unwrap_or(0) as i32;
+        let len = LANGUAGES.len() as i32;
+        let next = ((cur + delta) % len + len) % len;
+        self.setup_lang = LANGUAGES[next as usize].to_string();
+    }
+
+    /// Persist the wizard's choices. Writes the pasted template to the workspace
+    /// and points `template_file` at it. Returns the workspace root so the UI can
+    /// open it in the user's editor.
+    pub fn finish_setup(&mut self) -> PathBuf {
+        let handle = self.setup_handle.trim().to_string();
+        if !handle.is_empty() {
+            self.config
+                .handles
+                .insert("codeforces".to_string(), handle);
+        }
+        self.config.default_language = self.setup_lang.clone();
+
+        let root = workspace::root(&self.config);
+        let _ = std::fs::create_dir_all(&root);
+
+        if !self.setup_template.trim().is_empty() {
+            let ext = self.solution_ext();
+            let tdir = root.join("templates");
+            let _ = std::fs::create_dir_all(&tdir);
+            let tpath = tdir.join(format!("template.{ext}"));
+            if std::fs::write(&tpath, &self.setup_template).is_ok() {
+                self.config.template_file = Some(tpath.to_string_lossy().to_string());
+            }
+        }
+
+        let cses = self.setup_cses.trim().to_string();
+        self.config.cses_session = if cses.is_empty() { None } else { Some(cses) };
+
+        let _ = self.config.save();
+        self.theme = Theme::from_name(&self.config.theme);
+        self.setup_active = false;
+        root
+    }
+
+    /// Close the wizard without saving (user chose to skip).
+    pub fn skip_setup(&mut self) {
+        self.setup_active = false;
+        self.status_message =
+            "Setup skipped — you can configure everything in the Config tab.".to_string();
+    }
+
+    pub fn apply_filters(&mut self) {
+        let query_lower = self.search_query.to_lowercase();
+        self.filtered_problems = self
+            .problems
+            .iter()
+            .filter(|p| match self.platform_filter {
+                PlatformFilter::All => true,
+                PlatformFilter::Single(plat) => p.platform == plat,
+            })
+            .filter(|p| {
+                if query_lower.is_empty() {
+                    return true;
+                }
+                p.name.to_lowercase().contains(&query_lower)
+                    || p.id.to_lowercase().contains(&query_lower)
+                    || p.tags.iter().any(|t| t.to_lowercase().contains(&query_lower))
+            })
+            .filter(|p| {
+                if let Some(ref tag) = self.tag_filter {
+                    p.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase())
+                        || p.category
+                            .as_ref()
+                            .map(|c| c.to_lowercase() == tag.to_lowercase())
+                            .unwrap_or(false)
+                } else {
+                    true
+                }
+            })
+            .filter(|p| match self.contest_filter {
+                Some(ref cid) => {
+                    p.platform == Platform::Codeforces
+                        && p.id.starts_with(cid.as_str())
+                        && p.id[cid.len()..]
+                            .chars()
+                            .next()
+                            .is_some_and(|c| c.is_ascii_alphabetic())
+                }
+                None => true,
+            })
+            .filter(|p| {
+                if self.rating_min.is_none() && self.rating_max.is_none() {
+                    return true;
+                }
+                match p.rating {
+                    Some(r) => {
+                        self.rating_min.is_none_or(|lo| r >= lo)
+                            && self.rating_max.is_none_or(|hi| r <= hi)
+                    }
+                    // With a rating window active, hide unrated problems.
+                    None => false,
+                }
+            })
+            .cloned()
+            .collect();
+
+        if self.problem_selected >= self.filtered_problems.len() {
+            self.problem_selected = self.filtered_problems.len().saturating_sub(1);
+        }
+    }
+
+    pub fn mark_solved_problems(&mut self) {
+        let mut solved_set = std::collections::HashSet::new();
+        let mut attempted_set = std::collections::HashSet::new();
+        for sub in &self.submissions {
+            let key = format!("{:?}:{}", sub.platform, sub.problem_id);
+            if sub.verdict == Verdict::Accepted {
+                solved_set.insert(key.clone());
+            }
+            attempted_set.insert(key);
+        }
+
+        for prob in &mut self.problems {
+            // CSES solved status comes from the logged-in session, not submissions.
+            if prob.platform == Platform::Cses {
+                prob.status = if self.cses_solved.contains(&prob.id) {
+                    SolveStatus::Solved
+                } else if self.cses_attempted.contains(&prob.id) {
+                    SolveStatus::Attempted
+                } else {
+                    SolveStatus::Unsolved
+                };
+                continue;
+            }
+            let key = format!("{:?}:{}", prob.platform, prob.id);
+            if solved_set.contains(&key) {
+                prob.status = SolveStatus::Solved;
+            } else if attempted_set.contains(&key) {
+                prob.status = SolveStatus::Attempted;
+            } else {
+                prob.status = SolveStatus::Unsolved;
+            }
+        }
+    }
+
+    pub fn compute_analytics(&mut self) {
+        self.tag_stats = weakness::compute_tag_stats(&self.submissions, &self.problems);
+    }
+
+    pub fn compute_recommendations(&mut self) {
+        let user_rating = self
+            .rating_history
+            .last()
+            .map(|r| r.new_rating);
+        self.recommendations =
+            recommender::recommend_problems(&self.submissions, &self.problems, user_rating, 15);
+        if self.recommend_selected >= self.recommendations.len() {
+            self.recommend_selected = 0;
+        }
+    }
+
+    pub async fn load_from_cache(&mut self) -> anyhow::Result<()> {
+        let cache = Cache::open()?;
+        let mut all_problems = Vec::new();
+        for plat in &[Platform::Codeforces, Platform::Cses] {
+            all_problems.extend(cache.get_problems(*plat)?);
+        }
+        self.problems = all_problems;
+        self.submissions = cache.get_all_submissions()?;
+        self.rating_history = cache.get_rating_history(Platform::Codeforces)?;
+
+        let progress = load_cses_progress();
+        self.cses_solved = progress.solved.into_iter().collect();
+        self.cses_attempted = progress.attempted.into_iter().collect();
+
+        self.mark_solved_problems();
+        self.apply_filters();
+        self.compute_analytics();
+        self.compute_recommendations();
+        Ok(())
+    }
+
+    /// Number of consecutive days (ending today or yesterday) that have at
+    /// least one accepted submission.
+    pub fn current_streak(&self) -> u32 {
+        use std::collections::HashSet;
+        let mut days: HashSet<chrono::NaiveDate> = HashSet::new();
+        for s in &self.submissions {
+            if s.verdict == Verdict::Accepted {
+                days.insert(s.submitted_at.date_naive());
+            }
+        }
+        if days.is_empty() {
+            return 0;
+        }
+        let mut day = chrono::Utc::now().date_naive();
+        if !days.contains(&day) {
+            // Missing today doesn't break a streak yet; check yesterday.
+            day = day.pred_opt().unwrap_or(day);
+            if !days.contains(&day) {
+                return 0;
+            }
+        }
+        let mut streak = 0;
+        while days.contains(&day) {
+            streak += 1;
+            match day.pred_opt() {
+                Some(d) => day = d,
+                None => break,
+            }
+        }
+        streak
+    }
+
+    pub fn solved_count(&self) -> usize {
+        self.problems
+            .iter()
+            .filter(|p| p.status == SolveStatus::Solved)
+            .count()
+    }
+
+    pub fn current_rating(&self) -> Option<u32> {
+        self.rating_history.last().map(|r| r.new_rating)
+    }
+
+    pub fn cycle_theme(&mut self) {
+        let next = Theme::next_name(&self.config.theme);
+        self.config.theme = next.to_string();
+        self.theme = Theme::from_name(next);
+        let _ = self.config.save();
+        self.status_message = format!("Theme set to '{next}'");
+    }
+
+    pub fn scroll_down(&mut self) {
+        if !self.filtered_problems.is_empty() {
+            self.problem_selected =
+                (self.problem_selected + 1).min(self.filtered_problems.len() - 1);
+        }
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.problem_selected = self.problem_selected.saturating_sub(1);
+    }
+
+    pub fn page_down(&mut self) {
+        if !self.filtered_problems.is_empty() {
+            self.problem_selected =
+                (self.problem_selected + 20).min(self.filtered_problems.len() - 1);
+        }
+    }
+
+    pub fn page_up(&mut self) {
+        self.problem_selected = self.problem_selected.saturating_sub(20);
+    }
+
+    pub fn selected_problem(&self) -> Option<&Problem> {
+        self.filtered_problems.get(self.problem_selected)
+    }
+
+    pub fn open_selected_problem(&self) {
+        if let Some(p) = self.selected_problem() {
+            let _ = std::process::Command::new("open")
+                .arg(&p.url)
+                .spawn();
+        }
+    }
+
+    /// File extension for the user's default language.
+    pub fn solution_ext(&self) -> String {
+        self.config
+            .compile_commands
+            .get(&self.config.default_language)
+            .map(|c| c.extension.clone())
+            .unwrap_or_else(|| "txt".to_string())
+    }
+
+    /// The managed solution file for a problem — the single source of truth that
+    /// `o`/`T`/`s` all operate on.
+    pub fn solution_file(&self, problem: &Problem) -> PathBuf {
+        workspace::solution_path(&self.config, problem, &self.solution_ext())
+    }
+
+    /// Scaffold (or reopen) the solution file for the selected problem and
+    /// return what the UI needs to open the statement + editor.
+    pub fn start_problem(&mut self) -> Option<StartedProblem> {
+        let problem = self.selected_problem()?.clone();
+        self.start_problem_inner(problem)
+    }
+
+    /// Same as [`start_problem`] but resolving the problem from a pasted URL.
+    /// Works even for problems that haven't been synced into the cache.
+    pub fn start_problem_from_url(&mut self, url: &str) -> Option<StartedProblem> {
+        let parsed = match parse_problem_url(url) {
+            Some(p) => p,
+            None => {
+                self.status_message =
+                    "Couldn't parse that as a Codeforces or CSES problem URL".to_string();
+                return None;
+            }
+        };
+
+        // Prefer the richer cached problem (has name/tags/rating) if we have it.
+        let problem = self
+            .problems
+            .iter()
+            .find(|p| p.platform == parsed.platform && p.id == parsed.id)
+            .cloned()
+            .unwrap_or(parsed);
+
+        self.focus_problem(&problem);
+        self.start_problem_inner(problem)
+    }
+
+    /// Start a problem received from the browser companion. Unlike the URL flow,
+    /// we already have structured data and don't need to open the browser (the
+    /// user is already on the page).
+    pub fn start_problem_from_capture(&mut self, problem: Problem) -> Option<StartedProblem> {
+        self.focus_problem(&problem);
+        self.active_tab = Tab::Problems;
+        self.start_problem_inner(problem)
+    }
+
+    /// Start the currently-selected recommendation, jumping into the Problems
+    /// workflow so test/submit target it.
+    pub fn start_recommended(&mut self) -> Option<StartedProblem> {
+        let problem = self.recommendations.get(self.recommend_selected)?.problem.clone();
+        self.focus_problem(&problem);
+        self.active_tab = Tab::Problems;
+        self.start_problem_inner(problem)
+    }
+
+    /// Ensure a problem is present in the list, clear filters, and select it so
+    /// subsequent actions (test/submit) target it.
+    fn focus_problem(&mut self, problem: &Problem) {
+        if !self
+            .problems
+            .iter()
+            .any(|p| p.platform == problem.platform && p.id == problem.id)
+        {
+            self.problems.push(problem.clone());
+        }
+        self.platform_filter = PlatformFilter::All;
+        self.search_query.clear();
+        self.tag_filter = None;
+        self.rating_min = None;
+        self.rating_max = None;
+        self.apply_filters();
+        if let Some(idx) = self
+            .filtered_problems
+            .iter()
+            .position(|p| p.platform == problem.platform && p.id == problem.id)
+        {
+            self.problem_selected = idx;
+        }
+    }
+
+    pub fn recommend_scroll_down(&mut self) {
+        if !self.recommendations.is_empty() {
+            self.recommend_selected =
+                (self.recommend_selected + 1).min(self.recommendations.len() - 1);
+        }
+    }
+
+    pub fn recommend_scroll_up(&mut self) {
+        self.recommend_selected = self.recommend_selected.saturating_sub(1);
+    }
+
+    pub fn contest_scroll_down(&mut self) {
+        if !self.contests.is_empty() {
+            self.contest_selected = (self.contest_selected + 1).min(self.contests.len() - 1);
+        }
+    }
+
+    pub fn contest_scroll_up(&mut self) {
+        self.contest_selected = self.contest_selected.saturating_sub(1);
+    }
+
+    pub fn selected_contest_url(&self) -> Option<String> {
+        self.contests.get(self.contest_selected).map(|c| c.url.clone())
+    }
+
+    /// Filter the Problems tab to the selected contest's problems and switch to
+    /// it. Returns the number of problems found (0 means none are cached yet —
+    /// e.g. the contest hasn't started, so the caller should open the browser).
+    pub fn open_contest_problems(&mut self) -> usize {
+        let Some(contest) = self.contests.get(self.contest_selected).cloned() else {
+            return 0;
+        };
+        self.search_query.clear();
+        self.tag_filter = None;
+        self.rating_min = None;
+        self.rating_max = None;
+        self.platform_filter = PlatformFilter::All;
+        self.contest_filter = Some(contest.id.clone());
+        self.problem_selected = 0;
+        self.apply_filters();
+        let n = self.filtered_problems.len();
+        if n > 0 {
+            self.active_tab = Tab::Problems;
+            self.status_message =
+                format!("{n} problems from {} — press 'o' to start one", contest.name);
+        } else {
+            self.contest_filter = None;
+            self.apply_filters();
+        }
+        n
+    }
+
+    /// Order contests for display: running + upcoming first (soonest first),
+    /// then the most recent finished contests (capped, since CF returns years
+    /// of history).
+    pub fn set_contests(&mut self, contests: Vec<Contest>) {
+        let mut upcoming: Vec<Contest> = contests
+            .iter()
+            .filter(|c| c.phase != ContestPhase::Finished)
+            .cloned()
+            .collect();
+        upcoming.sort_by_key(|c| c.start_time);
+
+        let mut finished: Vec<Contest> = contests
+            .into_iter()
+            .filter(|c| c.phase == ContestPhase::Finished)
+            .collect();
+        finished.sort_by(|a, b| b.start_time.cmp(&a.start_time));
+        finished.truncate(40);
+
+        upcoming.extend(finished);
+        self.contests = upcoming;
+        self.contest_selected = 0;
+    }
+
+    fn start_problem_inner(&mut self, problem: Problem) -> Option<StartedProblem> {
+        let ext = self.solution_ext();
+        let template = workspace::template_content(&self.config, &self.config.default_language);
+        let already_existed = workspace::solution_path(&self.config, &problem, &ext).exists();
+        let solution_path = match workspace::scaffold(&self.config, &problem, &ext, &template) {
+            Ok(p) => p,
+            Err(e) => {
+                self.status_message = format!("Could not create solution file: {e}");
+                return None;
+            }
+        };
+
+        let url = problem.url.clone();
+        self.status_message = format!(
+            "{} {} — {}",
+            if already_existed { "Reopened" } else { "Started" },
+            problem.id,
+            solution_path.display()
+        );
+        Some(StartedProblem {
+            problem,
+            solution_path,
+            url,
+            already_existed,
+        })
+    }
+
+    /// Gather the solution code + submit URL for the selected problem.
+    pub fn prepare_submit(&mut self) -> Option<SubmitAction> {
+        let problem = self.selected_problem()?.clone();
+        let ext = self.solution_ext();
+        let path = self.solution_file(&problem);
+        let code = match std::fs::read_to_string(&path) {
+            Ok(c) if !c.trim().is_empty() => c,
+            _ => {
+                self.status_message =
+                    "Nothing to submit yet — open the problem in your browser or press 'o', then write your solution"
+                        .to_string();
+                return None;
+            }
+        };
+        let submit_url = match submit_url_for(&problem) {
+            Some(u) => u,
+            None => {
+                self.status_message = "Submitting isn't supported for this platform".to_string();
+                return None;
+            }
+        };
+        let file_name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| format!("sol.{ext}"));
+        Some(SubmitAction {
+            submit_url,
+            code,
+            language: language_display(&self.config.default_language),
+            file_name,
+        })
+    }
+
+    /// Validate that the selected problem can be tested locally and return the
+    /// inputs the background runner needs.
+    pub fn prepare_test(
+        &mut self,
+    ) -> Option<(PathBuf, crate::data::config::CompileConfig, Vec<TestCase>)> {
+        let problem = self.selected_problem()?.clone();
+        let path = self.solution_file(&problem);
+        if !path.exists() {
+            self.status_message =
+                "No solution file yet — press 'o' to open this problem first".to_string();
+            return None;
+        }
+        let cfg = match self.config.compile_commands.get(&self.config.default_language) {
+            Some(c) => c.clone(),
+            None => {
+                self.status_message =
+                    format!("No compile command for '{}'", self.config.default_language);
+                return None;
+            }
+        };
+        let tests = workspace::load_tests(&self.config, &problem);
+        if tests.is_empty() {
+            self.status_message =
+                "No samples cached — open the problem in your browser (companion auto-captures) or press 'o'".to_string();
+            return None;
+        }
+        Some((path, cfg, tests))
+    }
+
+    /// Apply the free-text rating filter buffer (e.g. "1300-1600", "1500+",
+    /// "1500"). An empty buffer clears the filter.
+    pub fn apply_rating_input(&mut self) {
+        let raw = self.rating_input_buf.trim();
+        if raw.is_empty() {
+            self.rating_min = None;
+            self.rating_max = None;
+        } else if let Some((lo, hi)) = raw.split_once('-') {
+            self.rating_min = lo.trim().parse().ok();
+            self.rating_max = hi.trim().parse().ok();
+        } else if let Some(lo) = raw.strip_suffix('+') {
+            self.rating_min = lo.trim().parse().ok();
+            self.rating_max = None;
+        } else {
+            let v = raw.parse().ok();
+            self.rating_min = v;
+            self.rating_max = v;
+        }
+        self.problem_selected = 0;
+        self.apply_filters();
+    }
+
+    pub fn rating_filter_label(&self) -> Option<String> {
+        match (self.rating_min, self.rating_max) {
+            (None, None) => None,
+            (Some(lo), Some(hi)) if lo == hi => Some(lo.to_string()),
+            (Some(lo), Some(hi)) => Some(format!("{lo}-{hi}")),
+            (Some(lo), None) => Some(format!("{lo}+")),
+            (None, Some(hi)) => Some(format!("≤{hi}")),
+        }
+    }
+
+    pub fn clear_filters(&mut self) {
+        self.tag_filter = None;
+        self.contest_filter = None;
+        self.search_query.clear();
+        self.rating_min = None;
+        self.rating_max = None;
+        self.problem_selected = 0;
+        self.apply_filters();
+    }
+
+    pub fn cycle_platform(&mut self) {
+        self.platform_filter = self.platform_filter.next();
+        self.problem_selected = 0;
+        self.apply_filters();
+    }
+
+    pub fn config_fields(&self) -> Vec<(&str, String)> {
+        vec![
+            (
+                "Codeforces Handle",
+                self.config.cf_handle().unwrap_or("").to_string(),
+            ),
+            ("Default Language", language_display(&self.config.default_language)),
+            ("Theme", self.config.theme.clone()),
+            (
+                "Workspace Dir",
+                workspace::root(&self.config).display().to_string(),
+            ),
+            (
+                "Template File",
+                self.config.template_file.clone().unwrap_or_default(),
+            ),
+            ("Editor", self.config.editor.clone().unwrap_or_default()),
+            (
+                "CSES Session",
+                if self.config.cses_session.is_some() {
+                    "connected".to_string()
+                } else {
+                    String::new()
+                },
+            ),
+        ]
+    }
+
+    /// True if the currently-selected config field is a "pick" field that
+    /// cycles on Enter rather than being free-text edited.
+    pub fn config_field_is_cycle(&self) -> bool {
+        // Default Language (1) and Theme (2) cycle through preset options.
+        self.config_selected == 1 || self.config_selected == 2
+    }
+
+    /// Advance the selected cycle field to its next preset value.
+    pub fn cycle_config(&mut self) {
+        match self.config_selected {
+            1 => {
+                let cur = LANGUAGES
+                    .iter()
+                    .position(|l| *l == self.config.default_language)
+                    .unwrap_or(0);
+                self.config.default_language =
+                    LANGUAGES[(cur + 1) % LANGUAGES.len()].to_string();
+                let _ = self.config.save();
+            }
+            2 => self.cycle_theme(),
+            _ => {}
+        }
+    }
+
+    pub fn start_config_edit(&mut self) {
+        let fields = self.config_fields();
+        if let Some((_, val)) = fields.get(self.config_selected) {
+            self.config_edit_buf = val.clone();
+            self.config_editing = true;
+        }
+    }
+
+    pub fn save_config_edit(&mut self) {
+        match self.config_selected {
+            0 => {
+                self.config
+                    .handles
+                    .insert("codeforces".to_string(), self.config_edit_buf.clone());
+            }
+            1 => {
+                self.config.default_language = self.config_edit_buf.clone();
+            }
+            3 => {
+                let v = self.config_edit_buf.trim();
+                self.config.workspace_dir = if v.is_empty() {
+                    None
+                } else {
+                    Some(v.to_string())
+                };
+            }
+            4 => {
+                let v = self.config_edit_buf.trim();
+                self.config.template_file = if v.is_empty() {
+                    None
+                } else {
+                    Some(v.to_string())
+                };
+            }
+            5 => {
+                let v = self.config_edit_buf.trim();
+                self.config.editor = if v.is_empty() {
+                    None
+                } else {
+                    Some(v.to_string())
+                };
+            }
+            6 => {
+                let v = self.config_edit_buf.trim();
+                self.config.cses_session = if v.is_empty() {
+                    None
+                } else {
+                    Some(v.to_string())
+                };
+            }
+            _ => {}
+        }
+        self.config_editing = false;
+        let saved_cses = self.config_selected == 6;
+        let _ = self.config.save();
+        self.status_message = if saved_cses && self.config.cses_session.is_some() {
+            "CSES cookie saved — press r to sync, or visit cses.fi/problemset/list/ logged in".to_string()
+        } else {
+            "Configuration saved".to_string()
+        };
+    }
+}
+
+/// Fetch fresh data from the online judges and write it into the local cache.
+/// Runs on a background task; progress is reported back over `tx`. The UI
+/// thread reloads from the cache once `RefreshMsg::Done` arrives.
+pub async fn fetch_and_cache(
+    handle: Option<String>,
+    cses_session: Option<String>,
+    tx: Sender<RefreshMsg>,
+) {
+    let cf = CodeforcesClient::new();
+    let cses = CsesClient::new();
+
+    let cache = match Cache::open() {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = tx.send(RefreshMsg::Status(format!("Cache error: {e}")));
+            let _ = tx.send(RefreshMsg::Done);
+            return;
+        }
+    };
+
+    let _ = tx.send(RefreshMsg::Status("Syncing Codeforces problemset…".to_string()));
+    match cf.fetch_problems().await {
+        Ok(problems) => {
+            let _ = cache.upsert_problems(&problems);
+            let _ = tx.send(RefreshMsg::Status(format!(
+                "Loaded {} Codeforces problems",
+                problems.len()
+            )));
+        }
+        Err(e) => {
+            let _ = tx.send(RefreshMsg::Status(format!("Codeforces error: {e}")));
+        }
+    }
+
+    let _ = tx.send(RefreshMsg::Status("Syncing CSES problemset…".to_string()));
+    if let Ok(problems) = cses.fetch_problems().await {
+        let _ = cache.upsert_problems(&problems);
+    }
+
+    if let Some(session) = cses_session.filter(|s| !s.trim().is_empty()) {
+        let _ = tx.send(RefreshMsg::Status("Reading your CSES progress…".to_string()));
+        match cses.fetch_solved(&session).await {
+            Ok((solved, attempted)) => {
+                let n = solved.len();
+                save_cses_progress(&CsesProgress { solved, attempted });
+                let _ = tx.send(RefreshMsg::Status(if n == 0 {
+                    "CSES connected (0 solved so far)".to_string()
+                } else {
+                    format!("CSES: {n} problems solved")
+                }));
+            }
+            Err(e) => {
+                let _ = tx.send(RefreshMsg::Status(format!("CSES connect failed: {e}")));
+            }
+        }
+    }
+
+    let _ = tx.send(RefreshMsg::Status("Fetching upcoming contests…".to_string()));
+    match cf.fetch_contests().await {
+        Ok(contests) => {
+            let _ = tx.send(RefreshMsg::Contests(contests));
+        }
+        Err(e) => {
+            let _ = tx.send(RefreshMsg::Status(format!("Contest fetch error: {e}")));
+        }
+    }
+
+    if let Some(handle) = handle {
+        let _ = tx.send(RefreshMsg::Status(format!(
+            "Fetching submissions for {handle}…"
+        )));
+        match cf.fetch_submissions(&handle).await {
+            Ok(subs) => {
+                let _ = cache.upsert_submissions(&subs);
+                let _ = tx.send(RefreshMsg::Status(format!(
+                    "Loaded {} submissions for {handle}",
+                    subs.len()
+                )));
+            }
+            Err(e) => {
+                let _ = tx.send(RefreshMsg::Status(format!("Codeforces: {e}")));
+            }
+        }
+        if let Ok(history) = cf.fetch_rating_history(&handle).await {
+            let _ = cache.upsert_rating_history(Platform::Codeforces, &history);
+        }
+    } else {
+        let _ = tx.send(RefreshMsg::Status(
+            "No Codeforces handle set — add it in the Config tab".to_string(),
+        ));
+    }
+
+    let _ = tx.send(RefreshMsg::Done);
+}
+
+/// Parse a Codeforces or CSES problem URL into a (possibly minimal) Problem.
+/// Accepts the common Codeforces forms (`/problemset/problem/{c}/{i}`,
+/// `/contest/{c}/problem/{i}`, `/gym/{c}/problem/{i}`) and CSES `/task/{id}`.
+fn parse_problem_url(url: &str) -> Option<Problem> {
+    let trimmed = url.trim();
+    let base = trimmed.split(['?', '#']).next().unwrap_or(trimmed);
+    let segs: Vec<&str> = base.split('/').filter(|s| !s.is_empty()).collect();
+
+    let make = |platform: Platform, id: String, url: String| Problem {
+        platform,
+        id: id.clone(),
+        name: id,
+        url,
+        rating: None,
+        tags: Vec::new(),
+        category: None,
+        solved_count: None,
+        status: SolveStatus::Unsolved,
+    };
+
+    if base.contains("codeforces.com") {
+        let pi = segs.iter().position(|s| *s == "problem")?;
+        let (contest, index) = if let Some(ci) =
+            segs.iter().position(|s| *s == "contest" || *s == "gym")
+        {
+            (segs.get(ci + 1)?.to_string(), segs.get(pi + 1)?.to_string())
+        } else {
+            (segs.get(pi + 1)?.to_string(), segs.get(pi + 2)?.to_string())
+        };
+        if contest.is_empty() || index.is_empty() {
+            return None;
+        }
+        let index = index.to_uppercase();
+        let id = format!("{contest}{index}");
+        let url = format!("https://codeforces.com/problemset/problem/{contest}/{index}");
+        return Some(make(Platform::Codeforces, id, url));
+    }
+
+    if base.contains("cses.fi") {
+        let ti = segs.iter().position(|s| *s == "task")?;
+        let id = segs.get(ti + 1)?.to_string();
+        if id.is_empty() {
+            return None;
+        }
+        let url = format!("https://cses.fi/problemset/task/{id}/");
+        return Some(make(Platform::Cses, id, url));
+    }
+
+    None
+}
+
+/// Build the platform-specific submit page URL for a problem.
+fn submit_url_for(problem: &Problem) -> Option<String> {
+    match problem.platform {
+        Platform::Codeforces => {
+            let contest: String = problem.id.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if contest.is_empty() {
+                return None;
+            }
+            let index: String = problem
+                .id
+                .chars()
+                .skip_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .to_uppercase();
+            if index.is_empty() {
+                return Some(format!("https://codeforces.com/contest/{contest}/submit"));
+            }
+            Some(format!(
+                "https://codeforces.com/contest/{contest}/submit?submittedProblemIndex={index}"
+            ))
+        }
+        Platform::Cses => Some(format!(
+            "https://cses.fi/problemset/submit/{}/",
+            problem.id
+        )),
+        Platform::AtCoder => None,
+    }
+}
+
+fn parse_cf_parts(id: &str) -> (Option<String>, Option<String>) {
+    let contest: String = id.chars().take_while(|c| c.is_ascii_digit()).collect();
+    let index: String = id
+        .chars()
+        .skip_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .to_uppercase();
+    if contest.is_empty() {
+        return (None, None);
+    }
+    (
+        Some(contest),
+        if index.is_empty() { None } else { Some(index) },
+    )
+}
+
+fn platform_key(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Codeforces => "codeforces",
+        Platform::Cses => "cses",
+        Platform::AtCoder => "atcoder",
+    }
+}
+
+/// Queue a pending submission for the browser companion and return the payload.
+pub fn queue_pending_submit(
+    capture: &crate::engine::capture::CaptureServer,
+    problem: &Problem,
+    action: &SubmitAction,
+    language_key: &str,
+) {
+    let (contest, index) = parse_cf_parts(&problem.id);
+    let expires_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64 + 120_000)
+        .unwrap_or(0);
+    capture.set_pending_submit(crate::data::models::PendingSubmit {
+        ok: true,
+        platform: platform_key(problem.platform).to_string(),
+        id: problem.id.clone(),
+        contest,
+        index,
+        code: action.code.clone(),
+        language: language_key.to_string(),
+        file_name: action.file_name.clone(),
+        submit_url: action.submit_url.clone(),
+        expires_at,
+    });
+}
+
+/// Fetch sample tests for a problem in the background and cache them to disk.
+/// Progress/errors are reported back over `tx` as a status line.
+pub async fn fetch_samples_task(problem: Problem, config: Config, tx: Sender<String>) {
+    let result = match problem.platform {
+        Platform::Codeforces => CodeforcesClient::new().fetch_samples(&problem.url).await,
+        Platform::Cses => CsesClient::new().fetch_samples(&problem.url).await,
+        Platform::AtCoder => Err(anyhow::anyhow!("AtCoder is not supported yet")),
+    };
+
+    match result {
+        Ok(tests) => {
+            let n = tests.len();
+            let _ = workspace::save_tests(&config, &problem, &tests);
+            let _ = tx.send(format!(
+                "Fetched {n} sample test(s) for {} — press T to run them",
+                problem.id
+            ));
+        }
+        Err(e) => {
+            let _ = tx.send(format!(
+                "Couldn't auto-fetch samples for {} ({e})",
+                problem.id
+            ));
+        }
+    }
+}
+
+/// Compile and run the user's solution against the sample tests on a
+/// background task, sending results back over `tx`.
+pub async fn run_tests_task(
+    source: PathBuf,
+    cfg: crate::data::config::CompileConfig,
+    tests: Vec<TestCase>,
+    tx: Sender<TestMsg>,
+) {
+    match crate::engine::runner::run_all_tests(&source, &cfg, &tests, 5000).await {
+        Ok(results) => {
+            let _ = tx.send(TestMsg::Done(results));
+        }
+        Err(e) => {
+            let _ = tx.send(TestMsg::Failed(e.to_string()));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_codeforces_problemset_url() {
+        let p = parse_problem_url("https://codeforces.com/problemset/problem/4/A").unwrap();
+        assert_eq!(p.platform, Platform::Codeforces);
+        assert_eq!(p.id, "4A");
+    }
+
+    #[test]
+    fn parses_codeforces_contest_url() {
+        let p = parse_problem_url("https://codeforces.com/contest/1095/problem/f").unwrap();
+        assert_eq!(p.platform, Platform::Codeforces);
+        assert_eq!(p.id, "1095F");
+    }
+
+    #[test]
+    fn parses_codeforces_url_with_query_and_slash() {
+        let p =
+            parse_problem_url("https://codeforces.com/problemset/problem/1700/C/?locale=en").unwrap();
+        assert_eq!(p.id, "1700C");
+    }
+
+    #[test]
+    fn parses_cses_task_url() {
+        let p = parse_problem_url("https://cses.fi/problemset/task/1068/").unwrap();
+        assert_eq!(p.platform, Platform::Cses);
+        assert_eq!(p.id, "1068");
+    }
+
+    #[test]
+    fn rejects_unrelated_url() {
+        assert!(parse_problem_url("https://example.com/foo/bar").is_none());
+    }
+}

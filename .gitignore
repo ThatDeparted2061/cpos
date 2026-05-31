@@ -1,0 +1,13 @@
+/target
+.venv
+*.swp
+*.swo
+*~
+.DS_Store
+.githooks/
+docs/screens
+extensions/vscode/node_modules/
+extensions/vscode/out/
+extensions/vscode/*.vsix
+extensions/chrome/*.zip
+/*.zip
