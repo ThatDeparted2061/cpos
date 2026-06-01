@@ -289,6 +289,26 @@ async function readJson<T>(req: http.IncomingMessage): Promise<T> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as T;
 }
 
+const TUI_CAPTURE_PORT = 27121;
+
+async function forwardCaptureToTui(
+  problem: CapturedProblem,
+  solutionPath: string
+): Promise<void> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${TUI_CAPTURE_PORT}/capture/problem`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...problem, solution_path: solutionPath })
+    });
+    if (!res.ok) {
+      OUTPUT.appendLine(`TUI sync failed (${res.status}) — is the CPOS terminal app running?`);
+    }
+  } catch {
+    OUTPUT.appendLine("TUI not running — capture saved in VS Code only.");
+  }
+}
+
 async function captureProblem(problem: CapturedProblem): Promise<ProblemMeta> {
   validateProblem(problem);
   const lang = resolveDefaultLanguage();
@@ -337,6 +357,7 @@ async function captureProblem(problem: CapturedProblem): Promise<ProblemMeta> {
     ? `${tests.length} sample(s) → ${path.basename(solutionPath)}`
     : `${tests.length} sample(s)`;
   vscode.window.showInformationMessage(`CPOS · ${problem.id} (${problem.name}) — ${detail}.`);
+  await forwardCaptureToTui(problem, solutionPath);
   return lastProblem;
 }
 

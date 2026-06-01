@@ -1,5 +1,5 @@
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::TryRecvError;
 use std::time::Duration;
 
@@ -325,22 +325,17 @@ fn drain_captures(app: &mut App) {
         match msg {
             CaptureMsg::Problem(cap) => {
                 let tests = cap.tests.clone();
+                let external = cap.solution_path.clone();
                 let problem = cap.into_problem();
 
                 if !tests.is_empty() {
                     let _ = workspace::save_tests(&app.config, &problem, &tests);
                 }
-
-                if let Some(sp) = app.start_problem_from_capture(problem) {
-                    let n = tests.len();
-                    // Browser capture: focus in TUI only. VS Code companion opens the file.
-                    app.status_message = format!(
-                        "Browser capture: {} — selected ({} sample{})",
-                        sp.problem.name,
-                        n,
-                        if n == 1 { "" } else { "s" },
-                    );
+                if let Some(path) = external {
+                    app.set_solution_path(&problem, PathBuf::from(path));
                 }
+
+                let _ = app.start_problem_from_capture(problem);
             }
             CaptureMsg::CsesProgress(progress) => {
                 let n = progress.solved.len();

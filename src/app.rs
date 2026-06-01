@@ -243,6 +243,9 @@ pub struct App {
     pub capture_port: Option<u16>,
     pub capture_server: Option<crate::engine::capture::CaptureServer>,
 
+    /// External solution files (e.g. from VS Code capture) keyed by platform:id.
+    pub solution_paths: std::collections::HashMap<String, PathBuf>,
+
     pub config_selected: usize,
     pub config_editing: bool,
     pub config_edit_buf: String,
@@ -309,6 +312,7 @@ impl App {
             capture_rx: None,
             capture_port: None,
             capture_server: None,
+            solution_paths: std::collections::HashMap::new(),
             config_selected: 0,
             config_editing: false,
             config_edit_buf: String::new(),
@@ -642,9 +646,23 @@ impl App {
     }
 
     /// The managed solution file for a problem — the single source of truth that
-    /// `o`/`T`/`s` all operate on.
+    /// `o`/`T`/`s` all operate on. Uses a VS Code path when one was forwarded.
     pub fn solution_file(&self, problem: &Problem) -> PathBuf {
+        if let Some(path) = self.solution_paths.get(&Self::problem_key(problem)) {
+            if path.exists() {
+                return path.clone();
+            }
+        }
         workspace::solution_path(&self.config, problem, &self.solution_ext())
+    }
+
+    pub fn set_solution_path(&mut self, problem: &Problem, path: PathBuf) {
+        self.solution_paths
+            .insert(Self::problem_key(problem), path);
+    }
+
+    fn problem_key(problem: &Problem) -> String {
+        format!("{:?}:{}", problem.platform, problem.id)
     }
 
     /// Scaffold (or reopen) the solution file for the selected problem and
@@ -684,7 +702,34 @@ impl App {
     pub fn start_problem_from_capture(&mut self, problem: Problem) -> Option<StartedProblem> {
         self.focus_problem(&problem);
         self.active_tab = Tab::Problems;
-        self.start_problem_inner(problem)
+
+        if let Some(path) = self.solution_paths.get(&Self::problem_key(&problem)).cloned() {
+            if path.exists() {
+                let n = workspace::load_tests(&self.config, &problem).len();
+                self.status_message = format!(
+                    "Browser capture: {} — selected ({} sample{})",
+                    problem.name,
+                    n,
+                    if n == 1 { "" } else { "s" },
+                );
+                return Some(StartedProblem {
+                    url: problem.url.clone(),
+                    problem,
+                    solution_path: path,
+                    already_existed: true,
+                });
+            }
+        }
+
+        let started = self.start_problem_inner(problem)?;
+        let n = workspace::load_tests(&self.config, &started.problem).len();
+        self.status_message = format!(
+            "Browser capture: {} — selected ({} sample{})",
+            started.problem.name,
+            n,
+            if n == 1 { "" } else { "s" },
+        );
+        Some(started)
     }
 
     /// Start the currently-selected recommendation, jumping into the Problems
@@ -709,6 +754,7 @@ impl App {
         self.platform_filter = PlatformFilter::All;
         self.search_query.clear();
         self.tag_filter = None;
+        self.contest_filter = None;
         self.rating_min = None;
         self.rating_max = None;
         self.apply_filters();
@@ -718,6 +764,10 @@ impl App {
             .position(|p| p.platform == problem.platform && p.id == problem.id)
         {
             self.problem_selected = idx;
+        } else {
+            // Shouldn't happen once filters are cleared — keep the capture visible.
+            self.filtered_problems.insert(0, problem.clone());
+            self.problem_selected = 0;
         }
     }
 

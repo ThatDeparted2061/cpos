@@ -190,6 +190,10 @@ pub struct CapturedProblem {
     pub category: Option<String>,
     #[serde(default)]
     pub tests: Vec<TestCase>,
+    /// When VS Code captures into the user's open folder, it forwards this path
+    /// so the TUI can run/submit against the same file.
+    #[serde(default)]
+    pub solution_path: Option<String>,
 }
 
 impl CapturedProblem {
