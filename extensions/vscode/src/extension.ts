@@ -24,6 +24,8 @@ type CsesProgress = {
 type TestCase = {
   input: string;
   expected_output: string;
+  input_block_sizes?: number[];
+  input_output_offset?: number;
 };
 
 type CompileConfig = {
@@ -1476,58 +1478,73 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     touch-action: none;
   }
   .io-splitter:hover, .io-splitter.dragging { background: var(--accent-dim); }
-  .io-input-box {
+  .io-input-box, .io-exp-box {
     position: relative;
     border-radius: 4px;
     border: 1px solid var(--border-soft);
     background: var(--input-bg);
     overflow: hidden;
   }
-  .io-input-box:focus-within { border-color: var(--accent-dim); }
-  .io-line-bg {
+  .io-input-box:focus-within, .io-exp-box:focus-within { border-color: var(--accent-dim); }
+  .io-line-bg, .io-exp-line-bg {
     position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    padding: 6px 7px;
+    padding: 6px 7px 6px 0;
     overflow: hidden;
   }
-  .io-line-bg .ln {
+  .io-line-bg .ln, .io-exp-line-bg .ln {
+    display: flex;
+    align-items: stretch;
     min-height: calc(11px * 1.4);
     line-height: 1.4;
     font-size: 11px;
     font-family: var(--mono);
-    padding: 0 2px;
     border-radius: 2px;
     white-space: pre;
     overflow: hidden;
   }
-  .io-line-bg .ln.odd { background: color-mix(in srgb, var(--fg) 4%, transparent); }
-  .io-line-bg .ln.even { background: transparent; }
-  .io-input-box:hover .io-line-bg .ln,
-  .io-input-box:focus-within .io-line-bg .ln {
-    background: color-mix(in srgb, var(--warn) 22%, var(--input-bg));
+  .io-line-bg .ln-gutter, .io-exp-line-bg .ln-gutter {
+    flex: 0 0 18px;
+    text-align: right;
+    padding-right: 5px;
+    color: var(--dim);
+    font-size: 9px;
+    opacity: 0;
+    user-select: none;
   }
-  .io-input-box textarea.in {
+  .io-line-bg .ln.blk-hi .ln-gutter, .io-exp-line-bg .ln.blk-hi .ln-gutter { opacity: 1; color: var(--warn); }
+  .io-line-bg .ln-txt, .io-exp-line-bg .ln-txt {
+    flex: 1;
+    min-width: 0;
+    padding-right: 4px;
+    visibility: hidden;
+  }
+  .io-line-bg .ln.blk-odd, .io-exp-line-bg .ln.blk-odd { background: rgba(128, 128, 128, 0.11); }
+  .io-line-bg .ln.blk-even, .io-exp-line-bg .ln.blk-even { background: transparent; }
+  .io-line-bg .ln.blk-hi, .io-exp-line-bg .ln.blk-hi {
+    background: rgba(240, 192, 96, 0.38) !important;
+  }
+  .io-input-box textarea.in, .io-exp-box textarea.exp {
     position: relative;
     z-index: 1;
     display: block;
     width: 100%;
-    min-height: 3.2em;
     resize: vertical;
     border: none;
     background: transparent;
     color: var(--fg);
-    padding: 6px 7px;
+    padding: 6px 7px 6px 25px;
     font-family: var(--mono);
     font-size: 11px;
     line-height: 1.4;
     overflow-y: auto;
+    caret-color: var(--fg);
   }
-  .io-input-box textarea.in:focus { outline: none; }
-  .io-col .exp {
-    min-height: 2.4em;
-  }
+  .io-input-box textarea.in { min-height: 3.2em; }
+  .io-exp-box textarea.exp { min-height: 2.4em; }
+  .io-input-box textarea.in:focus, .io-exp-box textarea.exp:focus { outline: none; }
   label {
     font-size: 8px;
     letter-spacing: 0.1em;
@@ -1597,21 +1614,217 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     persistUiState();
   }
 
-  function inputLineHtml(text) {
-    const raw = String(text == null ? "" : text);
-    const lines = raw.split("\\n");
-    if (!lines.length) lines.push("");
+  function inferOutputOffset(blockSizes, expected) {
+    const expCount = String(expected || "").split("\\n").filter(function (l) { return l.trim().length > 0; }).length;
+    if (blockSizes.length === expCount + 1) return 1;
+    if (blockSizes.length > expCount && blockSizes[0] === 1) return 1;
+    return 0;
+  }
+
+  function computeInputBlocks(lines, expected, blockSizes, outputOffset) {
+    if (blockSizes && blockSizes.length) {
+      const offset = typeof outputOffset === "number" ? outputOffset : inferOutputOffset(blockSizes, expected);
+      const blocks = [];
+      let idx = 0;
+      for (let i = 0; i < blockSizes.length; i++) {
+        const size = Math.max(1, blockSizes[i]);
+        blocks.push({
+          start: idx,
+          end: idx + size - 1,
+          outIdx: i >= offset ? i - offset : -1
+        });
+        idx += size;
+      }
+      if (idx < lines.length) {
+        blocks.push({ start: idx, end: lines.length - 1, outIdx: -1 });
+      }
+      return { blocks: blocks, outputOffset: offset };
+    }
+
+    const expLines = String(expected || "").split("\\n");
+    const expCount = expLines.filter(function (l) { return l.trim().length > 0; }).length;
+
+    const blankBlocks = [];
+    let curStart = 0;
+    let inBlock = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === "") {
+        if (inBlock) {
+          blankBlocks.push({ start: curStart, end: i - 1, outIdx: blankBlocks.length });
+          inBlock = false;
+        }
+      } else if (!inBlock) {
+        curStart = i;
+        inBlock = true;
+      }
+    }
+    if (inBlock) blankBlocks.push({ start: curStart, end: lines.length - 1, outIdx: blankBlocks.length });
+    if (blankBlocks.length > 1 && blankBlocks.length === expCount) {
+      return { blocks: blankBlocks, outputOffset: 0 };
+    }
+
+    const t = parseInt(String(lines[0] || "").trim(), 10);
+    if (!isNaN(t) && t > 0 && t === expCount && lines.length > t) {
+      const rest = lines.length - 1;
+      if (rest === t) {
+        const oneLineBlocks = Array.from({ length: t }, function (_, i) {
+          return { start: i + 1, end: i + 1, outIdx: i };
+        });
+        return { blocks: [{ start: 0, end: 0, outIdx: -1 }].concat(oneLineBlocks), outputOffset: 1 };
+      }
+    }
+
+    return { blocks: [{ start: 0, end: Math.max(0, lines.length - 1), outIdx: -1 }], outputOffset: 0 };
+  }
+
+  function lineIndexFromTextarea(ta, clientY) {
+    const style = getComputedStyle(ta);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.4;
+    const padTop = parseFloat(style.paddingTop) || 0;
+    const rect = ta.getBoundingClientRect();
+    const y = clientY - rect.top + ta.scrollTop - padTop;
+    const lines = ta.value.split("\\n");
+    const idx = Math.floor(y / lineHeight);
+    return Math.max(0, Math.min(lines.length - 1, idx));
+  }
+
+  function blockForLine(blocks, lineIdx) {
+    for (let i = 0; i < blocks.length; i++) {
+      if (lineIdx >= blocks[i].start && lineIdx <= blocks[i].end) return i;
+    }
+    return -1;
+  }
+
+  function lineRowsHtml(lines, blocks, gutter) {
     return lines.map(function (line, i) {
-      const shown = line.length ? esc(line) : "&nbsp;";
-      return '<div class="ln ' + (i % 2 ? "even" : "odd") + '"><span class="ln-txt">' + shown + '</span></div>';
+      const blk = blockForLine(blocks, i);
+      const gutterTxt = gutter && blk >= 0 && blocks[blk].start === i && blocks[blk].outIdx >= 0
+        ? String(blocks[blk].outIdx + 1)
+        : "";
+      const blkClass = blk >= 0 && blk % 2 ? "even" : "odd";
+      const blkId = blk >= 0 ? blk : -1;
+      // Background rows are stripe/gutter only — text lives in the textarea to avoid double-render ghosting.
+      return '<div class="ln blk-' + blkClass + '" data-blk="' + blkId + '" data-line="' + i + '"><span class="ln-gutter">' + gutterTxt + '</span><span class="ln-txt">' + (line.length ? "x" : "&nbsp;") + '</span></div>';
     }).join("");
   }
 
+  function syncIoLines(card) {
+    const inTa = card.querySelector("textarea.in");
+    const expTa = card.querySelector("textarea.exp");
+    if (!inTa || !expTa) return;
+    const inLines = inTa.value.split("\\n");
+    if (!inLines.length) inLines.push("");
+    const sizesRaw = card.getAttribute("data-block-sizes");
+    const blockSizes = sizesRaw ? sizesRaw.split(",").map(Number).filter(function (n) { return n > 0; }) : null;
+    const offsetRaw = card.getAttribute("data-output-offset");
+    const outputOffset = offsetRaw != null && offsetRaw !== "" ? parseInt(offsetRaw, 10) : undefined;
+    const meta = computeInputBlocks(inLines, expTa.value, blockSizes && blockSizes.length ? blockSizes : null, outputOffset);
+    const blocks = meta.blocks;
+    card._ioBlocks = blocks;
+    card._ioOutputOffset = meta.outputOffset;
+    const inBg = card.querySelector(".io-line-bg");
+    const expBg = card.querySelector(".io-exp-line-bg");
+    if (inBg) inBg.innerHTML = lineRowsHtml(inLines, blocks, true);
+    const expLines = expTa.value.split("\\n");
+    if (!expLines.length) expLines.push("");
+    const expBlocks = expLines.map(function (_, i) { return { start: i, end: i, outIdx: i }; });
+    if (expBg) expBg.innerHTML = lineRowsHtml(expLines, expBlocks, true);
+    autoResizeTextareas(card);
+  }
+
+  function setBlockHighlight(card, inputBlockIdx, expLineIdx) {
+    if (!card) return;
+    const key = inputBlockIdx + ":" + expLineIdx;
+    if (card._hiKey === key) return;
+    card._hiKey = key;
+    card.querySelectorAll(".io-line-bg .ln").forEach(function (ln) {
+      const blk = parseInt(ln.getAttribute("data-blk"), 10);
+      ln.classList.toggle("blk-hi", inputBlockIdx >= 0 && blk === inputBlockIdx);
+    });
+    card.querySelectorAll(".io-exp-line-bg .ln").forEach(function (ln) {
+      const line = parseInt(ln.getAttribute("data-line"), 10);
+      ln.classList.toggle("blk-hi", expLineIdx >= 0 && line === expLineIdx);
+    });
+  }
+
+  function clearBlockHighlight(card) {
+    if (!card) return;
+    card._hiKey = "";
+    card.querySelectorAll(".ln.blk-hi").forEach(function (ln) { ln.classList.remove("blk-hi"); });
+  }
+
+  function bindIoScroll(card) {
+    const pairs = [
+      [card.querySelector("textarea.in"), card.querySelector(".io-line-bg")],
+      [card.querySelector("textarea.exp"), card.querySelector(".io-exp-line-bg")]
+    ];
+    pairs.forEach(function (pair) {
+      const ta = pair[0];
+      const bg = pair[1];
+      if (!ta || !bg || ta._cposScrollBound) return;
+      ta._cposScrollBound = true;
+      ta.addEventListener("scroll", function () {
+        bg.style.transform = "translateY(" + (-ta.scrollTop) + "px)";
+      });
+    });
+  }
+
+  function bindIoHover(card) {
+    if (card._ioHoverBound) return;
+    card._ioHoverBound = true;
+    bindIoScroll(card);
+    const inBox = card.querySelector(".io-input-box");
+    const expBox = card.querySelector(".io-exp-box");
+    const inTa = card.querySelector("textarea.in");
+    const expTa = card.querySelector("textarea.exp");
+
+    function pickFromInput(ev) {
+      if (!inTa) return;
+      const lineIdx = lineIndexFromTextarea(inTa, ev.clientY);
+      const blocks = card._ioBlocks || [{ start: 0, end: 0, outIdx: -1 }];
+      const b = blockForLine(blocks, lineIdx);
+      const outIdx = b >= 0 && blocks[b] ? blocks[b].outIdx : -1;
+      setBlockHighlight(card, b, outIdx);
+    }
+
+    function pickFromExpected(ev) {
+      if (!expTa) return;
+      const lineIdx = lineIndexFromTextarea(expTa, ev.clientY);
+      const offset = card._ioOutputOffset || 0;
+      setBlockHighlight(card, lineIdx >= 0 ? lineIdx + offset : -1, lineIdx);
+    }
+
+    if (inBox) {
+      inBox.addEventListener("mousemove", pickFromInput);
+      inBox.addEventListener("mouseleave", function () { clearBlockHighlight(card); });
+    }
+    if (expBox) {
+      expBox.addEventListener("mousemove", pickFromExpected);
+      expBox.addEventListener("mouseleave", function () { clearBlockHighlight(card); });
+    }
+  }
+
+  function inputLineHtml(text, expected, blockSizes, outputOffset) {
+    const lines = String(text == null ? "" : text).split("\\n");
+    if (!lines.length) lines.push("");
+    const meta = computeInputBlocks(lines, expected, blockSizes, outputOffset);
+    return lineRowsHtml(lines, meta.blocks, true);
+  }
+
+  function expLineHtml(text) {
+    const lines = String(text == null ? "" : text).split("\\n");
+    if (!lines.length) lines.push("");
+    const blocks = lines.map(function (_, i) { return { start: i, end: i }; });
+    return lineRowsHtml(lines, blocks, true);
+  }
+
   function syncInputLines(ta) {
-    const box = ta.closest(".io-input-box");
-    const bg = box && box.querySelector(".io-line-bg");
-    if (bg) bg.innerHTML = inputLineHtml(ta.value);
-    autoResizeTextareas(box || ta.closest(".test") || document);
+    const card = ta.closest(".test");
+    if (card) {
+      card.removeAttribute("data-block-sizes");
+      card.removeAttribute("data-output-offset");
+      syncIoLines(card);
+    }
   }
 
   function bindIoSplitters(root) {
@@ -1653,7 +1866,15 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     cards.forEach((card) => {
       const input = card.querySelector("textarea.in").value;
       const expected_output = card.querySelector("textarea.exp").value;
-      tests.push({ input, expected_output });
+      const row = { input, expected_output };
+      const sizesRaw = card.getAttribute("data-block-sizes");
+      if (sizesRaw) {
+        const sizes = sizesRaw.split(",").map(Number).filter(function (n) { return n > 0; });
+        if (sizes.length) row.input_block_sizes = sizes;
+      }
+      const offsetRaw = card.getAttribute("data-output-offset");
+      if (offsetRaw != null && offsetRaw !== "") row.input_output_offset = parseInt(offsetRaw, 10);
+      tests.push(row);
     });
     return tests;
   }
@@ -1786,7 +2007,13 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     const got = '<div class="result-slot">' + resultHtml(r) + '</div>';
     const inRows = textareaRows(t.input, 3, 14);
     const expRows = textareaRows(t.expected_output, 2, 6);
-    return '<div class="box test ' + cardClass + '" data-index="' + i + '">'
+    const blockAttr = t.input_block_sizes && t.input_block_sizes.length
+      ? ' data-block-sizes="' + t.input_block_sizes.join(",") + '"'
+      : "";
+    const offsetAttr = typeof t.input_output_offset === "number"
+      ? ' data-output-offset="' + t.input_output_offset + '"'
+      : "";
+    return '<div class="box test ' + cardClass + '" data-index="' + i + '"' + blockAttr + offsetAttr + '>'
       + '<div class="test-head">'
       + '<div class="test-title"><span class="idx">Test ' + (i + 1) + '</span><span class="verdict ' + vClass + '">' + verdict + '</span></div>'
       + '<div class="test-actions">'
@@ -1797,11 +2024,12 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       + '<div class="test-body">'
       + '<div class="io-grid" style="--io-in-pct:' + ioSplit + '%">'
       + '<div class="io-col io-col-input"><label>Input</label>'
-      + '<div class="io-input-box"><div class="io-line-bg">' + inputLineHtml(t.input) + '</div>'
+      + '<div class="io-input-box"><div class="io-line-bg">' + inputLineHtml(t.input, t.expected_output, t.input_block_sizes, t.input_output_offset) + '</div>'
       + '<textarea class="in" rows="' + inRows + '" spellcheck="false">' + esc(t.input) + '</textarea></div></div>'
       + '<div class="io-splitter" data-splitter title="Drag to resize"></div>'
       + '<div class="io-col io-col-exp"><label>Expected</label>'
-      + '<textarea class="exp" rows="' + expRows + '" spellcheck="false">' + esc(t.expected_output) + '</textarea></div>'
+      + '<div class="io-exp-box"><div class="io-exp-line-bg">' + expLineHtml(t.expected_output) + '</div>'
+      + '<textarea class="exp" rows="' + expRows + '" spellcheck="false">' + esc(t.expected_output) + '</textarea></div></div>'
       + '</div>'
       + got
       + '</div>'
@@ -1826,6 +2054,10 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     bind();
     applyIoSplit(ioSplit);
     bindIoSplitters(app);
+    app.querySelectorAll(".test").forEach(function (card) {
+      syncIoLines(card);
+      bindIoHover(card);
+    });
     autoResizeTextareas(app);
   }
 
@@ -1860,6 +2092,10 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     });
     bind();
     bindIoSplitters(app);
+    app.querySelectorAll(".test").forEach(function (card) {
+      syncIoLines(card);
+      bindIoHover(card);
+    });
   }
 
   function bind() {
@@ -1908,9 +2144,14 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     });
     document.querySelectorAll("textarea.exp").forEach((ta) => {
       ta.oninput = () => {
+        const card = ta.closest(".test");
+        if (card) syncIoLines(card);
         schedulePersist();
         autoResizeTextareas(ta.closest(".test") || document);
       };
+    });
+    document.querySelectorAll(".test").forEach(function (card) {
+      bindIoHover(card);
     });
     autoResizeTextareas(document);
   }

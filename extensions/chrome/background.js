@@ -89,19 +89,23 @@ function urlsMatch(a, b) {
 async function findOrOpenTab(url) {
   if (!url) return null;
 
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 12; i++) {
     const tabs = await chrome.tabs.query({});
     const match = tabs.find((t) => t.url && urlsMatch(t.url, url));
-    if (match?.id != null) return match;
+    if (match?.id != null) {
+      await waitForTab(match.id, 15000);
+      return match;
+    }
     await sleep(400);
   }
 
   const tab = await chrome.tabs.create({ url, active: true });
-  if (tab.id != null) await waitForTab(tab.id);
+  if (tab.id != null) await waitForTab(tab.id, 15000);
   return tab;
 }
 
-// Runs in Codeforces page MAIN world.
+// Runs in Codeforces page MAIN world — CPH-style: set textarea + selects quietly, then click Submit.
+// Do NOT dispatch "change" on language/problem selects; CF reloads Ace and wipes source on change.
 async function cposSubmitOnPage(code, languageId, problemIndex, problemId) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -129,185 +133,69 @@ async function cposSubmitOnPage(code, languageId, problemIndex, problemId) {
     return document.querySelector('select[name="submittedProblemIndex"]');
   }
 
-  function problemCode() {
-    if (problemId) return String(problemId);
-    if (problemIndex) return String(problemIndex);
-    return indexFromUrl() || "";
-  }
-
-  function getAceEditor() {
-    if (typeof window.ace === "undefined" || typeof window.ace.edit !== "function") {
-      return null;
-    }
-    try {
-      return window.ace.edit("editor");
-    } catch {
-      return null;
-    }
-  }
-
-  function aceReady() {
-    const ed = getAceEditor();
-    return !!ed && typeof ed.setValue === "function";
-  }
-
-  function getCsrf() {
-    return (
-      document.querySelector('meta[name="X-Csrf-Token"]')?.getAttribute("content") ||
-      document.querySelector(".csrf-token[data-csrf]")?.getAttribute("data-csrf") ||
-      document.querySelector('[name="csrf_token"]')?.value ||
-      null
-    );
-  }
-
-  function readSource() {
-    const ed = getAceEditor();
-    if (ed) {
-      const v = ed.getValue();
-      if (v?.trim()) return v;
-    }
-    const textarea = findTextarea();
-    if (textarea?.value?.trim()) return textarea.value;
-    return "";
-  }
-
-  function writeSource(text) {
-    const ed = getAceEditor();
-    if (ed) {
-      ed.setValue(text, -1);
-      ed.clearSelection();
-      ed.resize();
-    }
-    const textarea = findTextarea();
-    if (textarea) {
-      textarea.value = text;
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-      textarea.dispatchEvent(new Event("change", { bubbles: true }));
-      if (window.jQuery) {
-        window.jQuery(textarea).val(text).trigger("change");
-      }
-    }
-  }
-
-  function setProblemField() {
-    const fullId = problemCode();
-    const input = findProblemCodeInput();
-    if (input && fullId) {
-      input.value = fullId;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      return true;
-    }
-    const select = findProblemIndexSelect();
-    if (select && problemIndex) {
-      setProblem(select, problemIndex);
-      return true;
-    }
-    return false;
-  }
-
-  function setProblem(prob, idx) {
-    if (!prob || !idx) return;
-    const want = String(idx).toUpperCase();
-    for (const opt of prob.options) {
-      const val = (opt.value || "").toUpperCase();
-      const text = (opt.textContent || "").trim().toUpperCase();
-      if (val === want || text.startsWith(want) || val.includes(want)) {
-        prob.value = opt.value;
-        prob.dispatchEvent(new Event("change", { bubbles: true }));
-        return;
-      }
-    }
-  }
-
-  function setLanguage(lang, id) {
-    if (!lang || id == null) return;
-    for (const opt of lang.options) {
-      if (opt.value === String(id)) {
-        lang.value = opt.value;
-        lang.dispatchEvent(new Event("change", { bubbles: true }));
-        return;
-      }
-    }
-  }
-
-  function submitBasePath() {
-    const p = location.pathname;
-    const patterns = [
-      /^(\/contest\/\d+\/submit)/,
-      /^(\/gym\/\d+\/submit)/,
-      /^(\/group\/[^/]+\/contest\/\d+\/submit)/,
-      /^(\/edu\/[^/]+\/lesson\/[^/]+\/[^/]+\/practice\/contest\/\d+\/submit)/,
-      /^(\/problemset\/submit)/
-    ];
-    for (const re of patterns) {
-      const m = p.match(re);
-      if (m) return m[1];
-    }
-    return null;
-  }
-
   function indexFromUrl() {
     const params = new URLSearchParams(location.search);
     return params.get("submittedProblemIndex") || params.get("submittedProblemCode") || null;
   }
 
-  async function tryPost() {
-    const basePath = submitBasePath();
-    const csrf = getCsrf();
-    if (!basePath || !csrf) return false;
-
-    const lang = findLang();
-    const codeInput = findProblemCodeInput();
-    const problemSelect = findProblemIndexSelect();
-    const programTypeId =
-      (lang && lang.value) || (languageId != null ? String(languageId) : null);
-    if (!programTypeId || !String(code).trim()) return false;
-
-    let problemField;
-    let problemValue;
-    if (codeInput) {
-      problemField = "submittedProblemCode";
-      problemValue = codeInput.value || problemCode();
-    } else if (problemSelect) {
-      problemField = problemSelect.name || "submittedProblemIndex";
-      problemValue = problemSelect.value || problemIndex || indexFromUrl();
-    } else {
-      problemField = "submittedProblemIndex";
-      problemValue = problemIndex || indexFromUrl();
+  function setSelectQuiet(select, value) {
+    if (!select || value == null) return false;
+    const want = String(value);
+    for (const opt of select.options) {
+      if (opt.value === want) {
+        select.value = opt.value;
+        return true;
+      }
     }
-    if (!problemValue) return false;
+    const upper = want.toUpperCase();
+    for (const opt of select.options) {
+      const val = (opt.value || "").toUpperCase();
+      const text = (opt.textContent || "").trim().toUpperCase();
+      if (val === upper || text.startsWith(upper) || text.startsWith(`${upper} `) || text.startsWith(`${upper}.`)) {
+        select.value = opt.value;
+        return true;
+      }
+    }
+    return false;
+  }
 
-    const body = new URLSearchParams();
-    body.set("csrf_token", csrf);
-    body.set("action", "submitSolutionFormSubmitted");
-    body.set(problemField, problemValue);
-    body.set("programTypeId", programTypeId);
-    body.set("source", code);
-
-    const res = await fetch(`${basePath}?csrf_token=${encodeURIComponent(csrf)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "X-Csrf-Token": csrf,
-        "X-Requested-With": "XMLHttpRequest"
-      },
-      body: body.toString(),
-      credentials: "include",
-      redirect: "follow"
-    });
-    return res.ok || res.redirected;
+  function syncAce(text) {
+    let ed = null;
+    if (typeof window.ace !== "undefined" && typeof window.ace.edit === "function") {
+      try {
+        ed = window.ace.edit("editor");
+      } catch {
+        /* ignore */
+      }
+    }
+    const editorDiv = document.querySelector("#editor");
+    if (!ed && editorDiv?.env?.editor) ed = editorDiv.env.editor;
+    if (!ed) return false;
+    try {
+      ed.setValue(text, -1);
+      ed.clearSelection();
+      ed.resize();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function clickSubmit() {
-    const btn =
-      document.getElementById("singlePageSubmitButton") ||
-      document.querySelector('input.submit[type="submit"]') ||
-      document.querySelector('form.submit-form input[type="submit"]');
-    if (btn && !btn.disabled) {
-      btn.disabled = false;
-      btn.click();
-      return true;
+    const candidates = [
+      document.getElementById("singlePageSubmitButton"),
+      document.querySelector('input.submit[type="submit"]'),
+      document.querySelector('form.submit-form input[type="submit"]'),
+      document.querySelector(".submit input[type='submit']"),
+      document.querySelector("button.submit"),
+      document.querySelector(".submit")
+    ];
+    for (const btn of candidates) {
+      if (btn && !btn.disabled) {
+        btn.disabled = false;
+        btn.click();
+        return true;
+      }
     }
     const form =
       document.querySelector("form.submit-form") ||
@@ -319,42 +207,44 @@ async function cposSubmitOnPage(code, languageId, problemIndex, problemId) {
     return false;
   }
 
-  for (let i = 0; i < 55; i++) {
+  function fillForm() {
+    const textarea = findTextarea();
     const lang = findLang();
-    if (!lang || lang.options.length <= 1) {
-      await sleep(200);
-      continue;
+    if (!textarea || !lang || lang.options.length <= 1) return false;
+
+    // CPH order: source → language → problem (all quiet — no change events).
+    textarea.value = code;
+
+    if (languageId != null) setSelectQuiet(lang, languageId);
+
+    const codeInput = findProblemCodeInput();
+    if (codeInput) {
+      const id = problemId || problemIndex || indexFromUrl();
+      if (id) codeInput.value = String(id);
+    } else {
+      const prob = findProblemIndexSelect();
+      const idx = problemIndex || indexFromUrl();
+      if (prob && idx) setSelectQuiet(prob, idx);
     }
 
-    setProblemField();
-    if (languageId != null) setLanguage(lang, languageId);
-    await sleep(i < 3 ? 600 : 250);
+    syncAce(code);
 
-    if (!aceReady() && !findTextarea() && i < 50) {
-      await sleep(200);
-      continue;
+    if (!textarea.value.trim()) {
+      textarea.value = code;
+      syncAce(code);
     }
 
-    try {
-      if (await tryPost()) return { ok: true };
-    } catch {
-      /* fall through to DOM fill */
-    }
-
-    writeSource(code);
-    await sleep(250);
-    if (!readSource().trim()) {
-      writeSource(code);
-      await sleep(250);
-    }
-    if (!readSource().trim()) {
-      await sleep(200);
-      continue;
-    }
-
-    if (clickSubmit()) return { ok: true };
-    return { ok: false, reason: "no-submit-btn" };
+    return textarea.value.trim().length > 0;
   }
+
+  for (let i = 0; i < 80; i++) {
+    if (fillForm()) {
+      await sleep(i < 4 ? 400 : 150);
+      if (clickSubmit()) return { ok: true };
+    }
+    await sleep(250);
+  }
+
   return { ok: false, reason: "form-timeout" };
 }
 
@@ -436,17 +326,23 @@ async function handleCodeforces(pending, _endpoint) {
   const tab = await findOrOpenTab(pending.submitUrl);
   if (!tab?.id) return false;
 
+  await sleep(1200);
+
   const languageId = CF_LANGUAGE_IDS[pending.language] ?? null;
   const problemIndex = pending.index || null;
 
-  const results = await chrome.scripting.executeScript({
-    target: { tabId: tab.id, allFrames: false },
-    world: "MAIN",
-    func: cposSubmitOnPage,
-    args: [pending.code, languageId, problemIndex, pending.id || null]
-  });
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: false },
+      world: "MAIN",
+      func: cposSubmitOnPage,
+      args: [pending.code, languageId, problemIndex, pending.id || null]
+    });
+    if (results?.[0]?.result?.ok === true) return true;
+    await sleep(900);
+  }
 
-  return results?.[0]?.result?.ok === true;
+  return false;
 }
 
 async function handleCses(pending, _endpoint) {

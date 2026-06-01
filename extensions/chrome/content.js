@@ -19,6 +19,30 @@
     return out.replace(/^\n+|\n+$/g, "");
   }
 
+  /** Block line counts + output offset from Codeforces test-example-line-N markup. */
+  function inputBlockMeta(el, expectedOutput) {
+    const lineEls = el.querySelectorAll(".test-example-line");
+    if (!lineEls.length) return undefined;
+
+    const counts = new Map();
+    lineEls.forEach((line) => {
+      const m = line.className.match(/test-example-line-(\d+)/);
+      const id = m ? parseInt(m[1], 10) : 0;
+      counts.set(id, (counts.get(id) || 0) + 1);
+    });
+
+    const ids = [...counts.keys()].sort((a, b) => a - b);
+    const sizes = ids.map((id) => counts.get(id));
+    if (!sizes.length) return undefined;
+
+    const expLines = String(expectedOutput || "").split("\n").filter((l) => l.trim().length > 0);
+    let outputOffset = 0;
+    if (sizes.length === expLines.length + 1) outputOffset = 1;
+    else if (sizes.length > expLines.length && sizes[0] === 1) outputOffset = 1;
+
+    return { input_block_sizes: sizes, input_output_offset: outputOffset };
+  }
+
   function toast(message, ok) {
     const d = document.createElement("div");
     d.textContent = message;
@@ -186,7 +210,14 @@
       const inputs = document.querySelectorAll(".sample-test .input pre");
       const outputs = document.querySelectorAll(".sample-test .output pre");
       for (let i = 0; i < Math.min(inputs.length, outputs.length); i++) {
-        tests.push({ input: preText(inputs[i]), expected_output: preText(outputs[i]) });
+        const expected = preText(outputs[i]);
+        const meta = inputBlockMeta(inputs[i], expected);
+        const row = { input: preText(inputs[i]), expected_output: expected };
+        if (meta) {
+          row.input_block_sizes = meta.input_block_sizes;
+          row.input_output_offset = meta.input_output_offset;
+        }
+        tests.push(row);
       }
     } else {
       // CSES: examples are consecutive <pre> blocks inside the statement content.
@@ -436,33 +467,60 @@
     }
   }
 
-  function setSourceCode(code) {
+  function setSourceCode(code, quiet) {
     if (!code) return false;
+
+    const textarea = findSourceTextarea();
+    if (textarea) textarea.value = code;
 
     syncAceDisplay(code);
 
-    const textarea = findSourceTextarea();
-    if (textarea) {
-      textarea.value = code;
+    if (!quiet && textarea) {
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
       textarea.dispatchEvent(new Event("change", { bubbles: true }));
-      if (window.jQuery) {
-        window.jQuery(textarea).val(code).trigger("change");
-      }
     }
 
     return getSourceCode().trim().length > 0 || !!textarea?.value?.trim();
   }
 
+  /** CPH-style quiet fill: source → language → problem, no change events. */
+  function cfFillQuiet(pending) {
+    const textarea = findSourceTextarea();
+    const lang = findLangSelect();
+    if (!textarea || !lang || lang.options.length <= 1) return false;
+
+    textarea.value = pending.code;
+
+    const langId = CF_LANGUAGE_IDS[pending.language];
+    if (langId != null) setSelect(lang, langId, false);
+
+    setProblemField(pending, false);
+
+    syncAceDisplay(pending.code);
+
+    if (!textarea.value.trim()) {
+      textarea.value = pending.code;
+      syncAceDisplay(pending.code);
+    }
+
+    return textarea.value.trim().length > 0;
+  }
+
   function clickCodeforcesSubmit() {
-    const btn =
-      document.getElementById("singlePageSubmitButton") ||
-      document.querySelector('input.submit[type="submit"]') ||
-      document.querySelector('form.submit-form input[type="submit"]');
-    if (btn && !btn.disabled) {
-      btn.disabled = false;
-      btn.click();
-      return true;
+    const candidates = [
+      document.getElementById("singlePageSubmitButton"),
+      document.querySelector('input.submit[type="submit"]'),
+      document.querySelector('form.submit-form input[type="submit"]'),
+      document.querySelector(".submit input[type='submit']"),
+      document.querySelector("button.submit"),
+      document.querySelector(".submit")
+    ];
+    for (const btn of candidates) {
+      if (btn && !btn.disabled) {
+        btn.disabled = false;
+        btn.click();
+        return true;
+      }
     }
     return clickSubmitButton();
   }
@@ -626,32 +684,21 @@
     let lastReason = "form-not-ready";
 
     for (let attempt = 0; attempt < 60; attempt++) {
-      const csrf = getCfCsrf();
       const langSelect = findLangSelect();
-      const hasCsrf = !!csrf;
+      const textarea = findSourceTextarea();
       const hasLang = langSelect && langSelect.options.length > 1;
 
-      if (hasCsrf && (hasLang || attempt > 3)) {
-        await prepareCodeforcesForm(pending);
-
-        const editorReady = aceEditorReady() || !!findSourceTextarea();
-        if (!editorReady && attempt < 55) {
-          await sleep(300);
-          continue;
-        }
-
-        // 1) Direct POST — no Ace/textarea needed.
-        try {
-          if (await postCodeforcesSubmit(pending)) {
+      if (hasLang && textarea) {
+        if (cfFillQuiet(pending)) {
+          await sleep(250);
+          if (clickCodeforcesSubmit()) {
             await ackSubmit();
             toast(`CPOS · submitted ${pending.id}`, true);
             return true;
           }
-        } catch {
-          /* try next path */
         }
 
-        // 2) Page inject (MAIN world) — sets textarea + Ace + clicks Submit.
+        // 2) MAIN-world inject via background.
         const injected = await submitViaPageScript(pending);
         if (injected.ok) {
           await ackSubmit();
@@ -660,14 +707,15 @@
         }
         lastReason = injected.reason || "inject-failed";
 
-        // 3) DOM fallback — write source, verify, click Submit.
-        if (fillCodeforcesDom(pending)) {
-          await sleep(200);
-          if (getSourceCode().trim() && clickCodeforcesSubmit()) {
+        // 3) Direct POST fallback.
+        try {
+          if (await postCodeforcesSubmit(pending)) {
             await ackSubmit();
             toast(`CPOS · submitted ${pending.id}`, true);
             return true;
           }
+        } catch {
+          /* try again */
         }
         lastReason = "dom-fill-failed";
       }
