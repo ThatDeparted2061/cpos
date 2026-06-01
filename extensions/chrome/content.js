@@ -979,10 +979,25 @@
     toast("CPOS · submit timed out — is CPOS running?", false);
   }
 
+  // Codeforces submit is owned entirely by the background worker (it can reach
+  // the page's MAIN-world Ace editor). Filling here too caused a race that left
+  // the editor empty. We only nudge the background to act on this tab.
+  async function watchCodeforcesSubmit() {
+    for (let i = 0; i < 90; i++) {
+      try {
+        chrome.runtime.sendMessage({ type: "cpos-poll-submit" });
+      } catch {
+        /* background polls on its own timer too */
+      }
+      // On a successful submit CF navigates away and unloads this script.
+      await sleep(1000);
+    }
+  }
+
   (async function main() {
     try {
       if (location.hostname === "codeforces.com" && isCodeforcesSubmitPage()) {
-        await watchSubmitPage();
+        await watchCodeforcesSubmit();
         return;
       }
 
