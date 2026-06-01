@@ -201,6 +201,14 @@ MIT — see [LICENSE](LICENSE).
 
 CPOS is fully open source. You're free to use it, fork it, and build on it.
 
-Contributions are welcome and appreciated — whether that's a bug report, a doc fix, a new platform, or a polish pass on the TUI. If you want to help, read **[CONTRIBUTING.md](CONTRIBUTING.md)** for project layout, dev setup, and PR guidelines.
+Contributions are welcome and appreciated — whether that's a bug report, a doc fix, a new platform, or a polish pass on the TUI. Start with **[CONTRIBUTING.md](CONTRIBUTING.md)** for dev setup and PR guidelines.
+
+| Doc | Purpose |
+| --- | --- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the components connect |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [SECURITY.md](SECURITY.md) | Report vulnerabilities |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
 
 Questions or ideas: [GitHub Issues](https://github.com/Soham109/cpos/issues).

@@ -2,6 +2,10 @@
 
 Thanks for taking the time to contribute. CPOS is open source (MIT) — bug reports, ideas, docs fixes, and code are all welcome.
 
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md). For security issues, see [SECURITY.md](SECURITY.md) — do not open public issues for vulnerabilities.
+
+For how the pieces fit together, see [ARCHITECTURE.md](ARCHITECTURE.md). Release history is in [CHANGELOG.md](CHANGELOG.md).
+
 ## Ways to help
 
 - **Report bugs** — [open an issue](https://github.com/Soham109/cpos/issues) with steps to reproduce, your OS, and which part you use (terminal / VS Code / browser).
@@ -68,7 +72,7 @@ Regenerate TUI screenshots: `cargo run --example gen_screenshots`, then `python3
 1. **Fork** and branch from `main` (`fix/…`, `feat/…`, or `docs/…`).
 2. **Keep PRs focused** — one logical change is easier to review than a bundle.
 3. **Describe what and why** in the PR body, not just what files changed.
-4. **Test what you touch** — at minimum `cargo test` for Rust changes; manually smoke-test extensions if you change capture/submit/UI.
+4. **Test what you touch** — CI runs `cargo test` and compiles the VS Code extension; run them locally before opening a PR.
 5. **Match existing style** — naming, formatting, and patterns already in the file you're editing.
 
 Don't worry about perfect commit history; clear PR descriptions matter more.

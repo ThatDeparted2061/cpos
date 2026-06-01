@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest an idea for CPOS
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem are you trying to solve?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which part?
+      options:
+        - Terminal app (TUI)
+        - VS Code extension
+        - Browser companion
+        - Any / not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: alternatives
+    attributes:
+      label: Alternatives
+      options:
+        - label: I've considered workarounds and still think this belongs in CPOS
+          required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Mockups, links to problems/platforms, etc.
