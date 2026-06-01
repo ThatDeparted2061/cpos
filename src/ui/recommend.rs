@@ -67,7 +67,8 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let help_area = body[1];
 
     let header = Row::new(vec![
-        Cell::from(" Problem"),
+        Cell::from("  Problem"),
+        Cell::from("Name"),
         Cell::from("Rating"),
         Cell::from("Topics"),
     ])
@@ -91,27 +92,32 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         .map(|(i, rec)| {
             let p = &rec.problem;
             let selected = i == app.recommend_selected;
-            let base = if selected {
+            let row_style = if selected {
                 t.selection()
             } else {
                 Style::default().fg(t.fg)
             };
-            let marker = if selected { "▸ " } else { "  " };
+            let marker = if selected { "▸" } else { " " };
             let topics = top_topics(p, 2);
             Row::new(vec![
-                Cell::from(format!("{marker}{} · {}", p.display_id(), p.name)),
+                Cell::from(Line::from(vec![
+                    Span::styled(format!(" {marker} "), Style::default().fg(t.accent)),
+                    Span::styled(p.display_id().to_string(), Style::default().fg(t.dim)),
+                ])),
+                Cell::from(p.name.clone()),
                 Cell::from(p.difficulty_label())
                     .style(Style::default().fg(Theme::rating_color(p.rating))),
                 Cell::from(topics).style(Style::default().fg(t.dim)),
             ])
-            .style(base)
+            .style(row_style)
         })
         .collect();
 
     let widths = [
-        Constraint::Min(34),
+        Constraint::Length(12),
+        Constraint::Min(20),
         Constraint::Length(8),
-        Constraint::Length(28),
+        Constraint::Min(16),
     ];
 
     let table = Table::new(rows, widths).header(header).block(block);

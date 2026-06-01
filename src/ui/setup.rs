@@ -5,7 +5,12 @@ use crate::app::{language_display, App, SetupStep, LANGUAGES};
 
 pub fn draw(frame: &mut Frame, app: &App) {
     let t = &app.theme;
-    let area = centered_rect(70, 60, frame.area());
+    let height = if app.setup_step == SetupStep::Template {
+        78
+    } else {
+        60
+    };
+    let area = centered_rect(72, height, frame.area());
     frame.render_widget(Clear, area);
 
     let block = t.panel_accent("Welcome to CPOS · Quick Setup");
@@ -107,45 +112,7 @@ fn draw_body(frame: &mut Frame, app: &App, area: Rect) {
             }
             frame.render_widget(Paragraph::new(lines), area);
         }
-        SetupStep::Template => {
-            let lines = app.setup_template.lines().count();
-            let chars = app.setup_template.trim().len();
-            let preview: Vec<&str> = app.setup_template.lines().take(3).collect();
-
-            let mut body = vec![
-                Line::from(Span::styled(
-                    "Paste your solution template now (⌘V / Ctrl+V).",
-                    Style::default().fg(t.fg),
-                )),
-                Line::from(Span::styled(
-                    "Leave blank to use the built-in template — you can",
-                    Style::default().fg(t.dim),
-                )),
-                Line::from(Span::styled(
-                    "change it anytime in the Config tab.",
-                    Style::default().fg(t.dim),
-                )),
-                Line::from(""),
-            ];
-            if chars == 0 {
-                body.push(Line::from(Span::styled(
-                    "  (nothing pasted yet)",
-                    Style::default().fg(t.dim),
-                )));
-            } else {
-                body.push(Line::from(Span::styled(
-                    format!("  captured {lines} lines, {chars} chars:"),
-                    Style::default().fg(t.success),
-                )));
-                for l in preview {
-                    body.push(Line::from(Span::styled(
-                        format!("  │ {l}"),
-                        Style::default().fg(t.accent_dim),
-                    )));
-                }
-            }
-            frame.render_widget(Paragraph::new(body), area);
-        }
+        SetupStep::Template => draw_template_step(frame, app, area),
         SetupStep::Cses => {
             let connected = !app.setup_cses.trim().is_empty();
             let mut body = vec![
@@ -183,6 +150,98 @@ fn draw_body(frame: &mut Frame, app: &App, area: Rect) {
     }
 }
 
+fn draw_template_step(frame: &mut Frame, app: &App, area: Rect) {
+    let t = &app.theme;
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(4),
+        ])
+        .split(area);
+
+    let intro = vec![
+        Line::from(Span::styled(
+            "Paste your solution template (⌘V / Ctrl+V).",
+            Style::default().fg(t.fg),
+        )),
+        Line::from(Span::styled(
+            "Leave blank for the built-in template. Backspace clears.",
+            Style::default().fg(t.dim),
+        )),
+    ];
+    frame.render_widget(Paragraph::new(intro), chunks[0]);
+
+    let lines: Vec<&str> = app.setup_template.lines().collect();
+    let line_count = lines.len();
+    let title = if line_count == 0 {
+        " template preview ".to_string()
+    } else {
+        format!(" template · {line_count} lines ")
+    };
+
+    let block = Block::default()
+        .title(Span::styled(title, Style::default().fg(t.accent).add_modifier(Modifier::BOLD)))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(if line_count == 0 { t.border } else { t.accent_dim }))
+        .style(Style::default().bg(t.bg));
+
+    let inner = block.inner(chunks[1]);
+    frame.render_widget(block, chunks[1]);
+
+    if line_count == 0 {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                "Waiting for paste…",
+                Style::default().fg(t.dim),
+            ))
+            .alignment(Alignment::Center),
+            inner,
+        );
+        return;
+    }
+
+    let visible_rows = inner.height.saturating_sub(1) as usize;
+    let scroll = app.setup_template_scroll as usize;
+    let max_scroll = line_count.saturating_sub(visible_rows.max(1));
+    let scroll = scroll.min(max_scroll);
+    let code_width = inner.width.saturating_sub(5) as usize;
+
+    let mut body = Vec::new();
+    for (i, line) in lines.iter().skip(scroll).take(visible_rows).enumerate() {
+        let num = scroll + i + 1;
+        body.push(Line::from(vec![
+            Span::styled(format!("{:>3} ", num), Style::default().fg(t.dim)),
+            Span::styled(truncate_line(line, code_width), Style::default().fg(t.fg)),
+        ]));
+    }
+
+    if line_count > visible_rows {
+        body.push(Line::from(Span::styled(
+            format!(
+                "  … {} more line(s) — ↑/↓ to scroll",
+                line_count.saturating_sub(scroll + visible_rows)
+            ),
+            Style::default().fg(t.dim),
+        )));
+    }
+
+    frame.render_widget(Paragraph::new(body), inner);
+}
+
+fn truncate_line(line: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return String::new();
+    }
+    if line.chars().count() <= max_chars {
+        return line.to_string();
+    }
+    let mut out: String = line.chars().take(max_chars.saturating_sub(1)).collect();
+    out.push('…');
+    out
+}
+
 fn masked(s: &str) -> String {
     let s = s.trim();
     if s.len() <= 6 {
@@ -217,6 +276,8 @@ fn hint_line(app: &App) -> Line<'static> {
             Span::raw(" "),
             key("Enter"),
             lbl(" continue   "),
+            key("↑/↓"),
+            lbl(" scroll   "),
             key("Backspace"),
             lbl(" clear   "),
             key("Esc"),

@@ -30,6 +30,7 @@ async fn main() -> Result<()> {
     let mut app = App::new(config);
 
     let _ = app.load_from_cache().await;
+    app.note_cache_loaded();
 
     // Start the browser companion capture listener.
     let (cap_tx, cap_rx) = std::sync::mpsc::channel();
@@ -50,9 +51,9 @@ async fn main() -> Result<()> {
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
 
-    // Keep things up to date automatically: sync in the background on launch if
-    // the cache is empty or hasn't been refreshed recently. No need to press 'r'.
-    if !app.setup_active && (app.problems.is_empty() || sync_is_stale()) {
+    // Sync in the background on launch when cache is empty, contests missing,
+    // or the last sync is older than a few hours.
+    if !app.setup_active && (app.problems.is_empty() || app.contests.is_empty() || sync_is_stale()) {
         trigger_refresh(&mut app);
     }
 
@@ -153,7 +154,8 @@ async fn run_app(
 /// lets you paste a whole template in one go.
 fn handle_paste(app: &mut App, text: &str) {
     if app.setup_active && app.setup_step == SetupStep::Template {
-        app.setup_template.push_str(text);
+        app.setup_template = app::normalize_template_text(text);
+        app.setup_template_scroll = 0;
     } else if app.setup_active && app.setup_step == SetupStep::Cses {
         app.setup_cses.push_str(text.trim());
     } else if app.config_editing {
@@ -189,9 +191,21 @@ fn handle_setup_input(app: &mut App, key: KeyCode) {
         },
         SetupStep::Template => match key {
             KeyCode::Esc => app.skip_setup(),
-            KeyCode::Enter => app.setup_step = SetupStep::Cses,
+            KeyCode::Enter => {
+                app.setup_step = SetupStep::Cses;
+                app.setup_template_scroll = 0;
+            }
             KeyCode::Backspace => {
-                app.setup_template.pop();
+                app.setup_template.clear();
+                app.setup_template_scroll = 0;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.setup_template_scroll = app.setup_template_scroll.saturating_sub(1);
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let lines = app.setup_template.lines().count();
+                let max = lines.saturating_sub(1) as u16;
+                app.setup_template_scroll = (app.setup_template_scroll + 1).min(max);
             }
             _ => {}
         },

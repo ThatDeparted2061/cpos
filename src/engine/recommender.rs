@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 use crate::data::models::*;
 use crate::engine::weakness::compute_tag_stats;
 
+pub const DEFAULT_COUNT: usize = 30;
+
 pub struct Recommendation {
     pub problem: Problem,
     pub reason: String,
@@ -11,18 +13,18 @@ pub struct Recommendation {
 /// Recommend unsolved problems to practice next.
 ///
 /// Two regimes:
-/// - **Cold start** (no accepted submissions): there's nothing personal to go
-///   on, so we surface popular, well-known problems around a sensible default
-///   level, spread across topics and ratings.
-/// - **Warm** (history present): we target the user's weak topics at a rating
-///   just above their current level, while keeping the list diverse so it isn't
-///   twenty near-identical problems.
+/// - **Cold start** (no accepted submissions): surface popular, well-known problems
+///   around a sensible default level, spread across topics and ratings.
+/// - **Warm** (history present): target weak topics at a rating just above the user's
+///   current level, boost unfinished attempts, and keep the list diverse.
 pub fn recommend_problems(
     submissions: &[Submission],
     all_problems: &[Problem],
     user_rating: Option<u32>,
     count: usize,
 ) -> Vec<Recommendation> {
+    let count = count.max(1);
+
     let solved_ids: HashSet<String> = submissions
         .iter()
         .filter(|s| s.verdict == Verdict::Accepted)
@@ -37,20 +39,24 @@ pub fn recommend_problems(
     let has_history = !solved_ids.is_empty();
 
     let tag_stats = compute_tag_stats(submissions, all_problems);
-    let weak_tags: Vec<String> = tag_stats
+    // Tag → weakness weight in [0, 1]: 1.0 means 0% solve rate, 0.0 means mastered.
+    let weak_weights: HashMap<String, f64> = tag_stats
         .iter()
         .filter(|t| t.solved + t.attempted >= 2)
-        .take(6)
-        .map(|t| t.tag.to_lowercase())
+        .take(10)
+        .map(|t| {
+            let total = (t.solved + t.attempted) as f64;
+            let rate = t.solved as f64 / total;
+            (t.tag.to_lowercase(), (1.0 - rate).clamp(0.0, 1.0))
+        })
         .collect();
 
     let center = user_rating.unwrap_or(1200);
-    // Practice a little above your current level to actually improve.
+    // Practice slightly above current level; widen the band a little for more candidates.
     let target = center + 100;
-    let lo = center.saturating_sub(200);
-    let hi = center + 300;
+    let lo = center.saturating_sub(250);
+    let hi = center + 350;
 
-    // Score every eligible candidate.
     let mut scored: Vec<Scored> = Vec::new();
     for problem in all_problems {
         let key = format!("{:?}:{}", problem.platform, problem.id);
@@ -65,43 +71,42 @@ pub fn recommend_problems(
         }
 
         let tags_lower: Vec<String> = problem.tags.iter().map(|t| t.to_lowercase()).collect();
-        let weak_matches: Vec<&String> =
-            tags_lower.iter().filter(|t| weak_tags.contains(t)).collect();
+        let weak_hits: Vec<(String, f64)> = tags_lower
+            .iter()
+            .filter_map(|t| weak_weights.get(t).map(|&w| (t.clone(), w)))
+            .collect();
 
         let mut score = 0.0_f64;
 
-        // Popularity: well-known problems are better practice. Log-scaled so a
-        // few mega-popular problems don't dominate everything.
+        // Popularity — log-scaled so mega-popular problems don't dominate.
         let pop = (problem.solved_count.unwrap_or(0) as f64 + 1.0).ln();
         score += pop;
 
-        // Closeness to the practice target.
+        // Closeness to the practice target rating.
         let dist = (rating as f64 - target as f64).abs();
-        score += (4.0 - dist / 150.0).max(0.0);
+        score += (5.0 - dist / 120.0).max(0.0);
 
-        // Weak-topic emphasis (only meaningful once there's history).
-        score += weak_matches.len() as f64 * 3.0;
+        // Weighted weak-topic emphasis: a 0%-rate tag counts more than a 50%-rate tag.
+        let weak_score: f64 = weak_hits.iter().map(|(_, w)| w * 5.0).sum();
+        score += weak_score;
 
-        // A small nudge toward problems you've tried but not solved.
-        if attempted_ids.contains(&key) {
-            score += 2.5;
+        // Extra nudge when a problem hits multiple weak areas at once.
+        if weak_hits.len() >= 2 {
+            score += 2.0;
         }
 
-        let reason = if !weak_matches.is_empty() {
-            let tags = weak_matches
-                .iter()
-                .take(2)
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("Weak topic: {tags}")
-        } else if attempted_ids.contains(&key) {
-            "Unfinished — give it another go".to_string()
-        } else if has_history {
-            format!("Just above your level · {rating}")
-        } else {
-            format!("Popular {rating} problem")
-        };
+        // Unfinished problems you've already started.
+        if attempted_ids.contains(&key) && !solved_ids.contains(&key) {
+            score += 3.0;
+        }
+
+        // Cold start: prefer mid-tier popular problems over extreme highs/lows.
+        if !has_history {
+            let mid = 1200.0;
+            score += (3.0 - (rating as f64 - mid).abs() / 400.0).max(0.0);
+        }
+
+        let reason = build_reason(&weak_hits, attempted_ids.contains(&key), has_history, rating);
 
         let primary_tag = tags_lower
             .first()
@@ -119,7 +124,32 @@ pub fn recommend_problems(
 
     scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
-    diversify(scored, count)
+    diversify(scored, count, has_history)
+}
+
+fn build_reason(
+    weak_hits: &[(String, f64)],
+    attempted: bool,
+    has_history: bool,
+    rating: u32,
+) -> String {
+    if !weak_hits.is_empty() {
+        let mut hits = weak_hits.to_vec();
+        hits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let tags = hits
+            .iter()
+            .take(2)
+            .map(|(t, _)| t.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("Weak topic: {tags}")
+    } else if attempted {
+        "Unfinished — give it another go".to_string()
+    } else if has_history {
+        format!("Just above your level · {rating}")
+    } else {
+        format!("Popular {rating} problem")
+    }
 }
 
 struct Scored {
@@ -130,15 +160,19 @@ struct Scored {
     rating: u32,
 }
 
-/// Greedily pick the highest-scoring problems while capping how many share the
-/// same primary tag or exact rating, so the list stays varied. If the caps are
-/// too strict to fill `count`, the remainder is topped up from what's left.
-fn diversify(scored: Vec<Scored>, count: usize) -> Vec<Recommendation> {
-    if count == 0 {
+/// Greedily pick high-scoring problems while capping duplicate tags/ratings so
+/// the list stays varied. Top up from the remainder if caps are too strict.
+fn diversify(scored: Vec<Scored>, count: usize, has_history: bool) -> Vec<Recommendation> {
+    if count == 0 || scored.is_empty() {
         return Vec::new();
     }
-    let tag_cap = (count / 3).max(3);
-    let rating_cap = (count / 4).max(3);
+
+    let tag_cap = (count / 3).max(4);
+    let rating_cap = if has_history {
+        (count / 5).max(3)
+    } else {
+        (count / 4).max(4)
+    };
 
     let mut tag_count: HashMap<String, usize> = HashMap::new();
     let mut rating_count: HashMap<u32, usize> = HashMap::new();
@@ -163,7 +197,6 @@ fn diversify(scored: Vec<Scored>, count: usize) -> Vec<Recommendation> {
         });
     }
 
-    // Top up if the diversity caps left us short.
     if out.len() < count {
         for (i, s) in scored.iter().enumerate() {
             if out.len() >= count {
@@ -179,4 +212,69 @@ fn diversify(scored: Vec<Scored>, count: usize) -> Vec<Recommendation> {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn prob(id: &str, rating: u32, tags: &[&str]) -> Problem {
+        Problem {
+            platform: Platform::Codeforces,
+            id: id.to_string(),
+            name: id.to_string(),
+            url: format!("https://codeforces.com/problemset/problem/{id}"),
+            rating: Some(rating),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            category: None,
+            solved_count: Some(10_000),
+            status: SolveStatus::Unsolved,
+        }
+    }
+
+    #[test]
+    fn prefers_weak_topic_problems() {
+        let problems = vec![
+            prob("1A", 800, &["math"]),
+            prob("2B", 1200, &["dp"]),
+            prob("3C", 1210, &["greedy"]),
+        ];
+        let subs = vec![Submission {
+            platform: Platform::Codeforces,
+            id: "1".into(),
+            problem_id: "9D".into(),
+            problem_name: "x".into(),
+            verdict: Verdict::WrongAnswer,
+            language: "cpp".into(),
+            time_ms: None,
+            memory_kb: None,
+            submitted_at: Utc::now(),
+            tags: vec!["dp".into()],
+            rating: Some(1200),
+        }];
+        let recs = recommend_problems(&subs, &problems, Some(1100), 2);
+        assert!(!recs.is_empty());
+        assert!(recs.iter().any(|r| r.problem.id == "2B"));
+    }
+
+    #[test]
+    fn skips_solved_problems() {
+        let problems = vec![prob("1A", 1000, &["math"])];
+        let subs = vec![Submission {
+            platform: Platform::Codeforces,
+            id: "1".into(),
+            problem_id: "1A".into(),
+            problem_name: "x".into(),
+            verdict: Verdict::Accepted,
+            language: "cpp".into(),
+            time_ms: None,
+            memory_kb: None,
+            submitted_at: Utc::now(),
+            tags: vec![],
+            rating: Some(1000),
+        }];
+        let recs = recommend_problems(&subs, &problems, Some(1000), 5);
+        assert!(recs.is_empty());
+    }
 }

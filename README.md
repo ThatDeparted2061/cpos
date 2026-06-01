@@ -122,9 +122,37 @@ Minimum setup: **browser companion + one of VS Code or terminal**. All three tog
 - **Run & submit** — from the VS Code panel or terminal keys; submit autofills your browser
 - **13 languages** — C, C++, Python, PyPy, Java, Kotlin, Rust, Go, C#, JS, Ruby, Haskell, Pascal
 - **Progress & analytics** — rating history, topic breakdown, activity heatmap
-- **Recommendations** — problems aimed at your weak topics
+- **Recommendations** — up to 30 personalized problems aimed at your weak topics (see below)
 - **Contests** — upcoming and running Codeforces contests with countdowns
 - **Private** — everything stays on your machine (`127.0.0.1`, no external servers)
+
+---
+
+## Recommendations
+
+After you sync (`r` in the terminal), CPOS builds a list of **30 unsolved problems** to practice next. Find them on the **Recommend** tab or the **Recommended Next** panel on the Dashboard.
+
+### How problems are picked
+
+CPOS only considers **unsolved** problems with a Codeforces rating in a band around your level (roughly −250 to +350 from your current rating, targeting about +100 above you).
+
+Each candidate gets a score from:
+
+| Signal | What it means |
+| --- | --- |
+| **Weak topics** | Tags where your solve rate is low get the most weight — a topic you fail 100% of the time counts more than one you're half-comfortable with |
+| **Multiple weak tags** | Problems that combine several weak areas get a small bonus |
+| **Unfinished attempts** | Problems you tried but didn't solve are boosted so you can finish what you started |
+| **Rating fit** | Problems near your target practice rating score higher |
+| **Popularity** | Well-known problems (many solves on Codeforces) are preferred — they're usually better written |
+
+The top scorers are then **diversified**: CPOS caps how many problems share the same primary tag or exact rating so the list isn't fifteen identical DP problems.
+
+### Cold start (no solves yet)
+
+If you haven't accepted anything yet, CPOS can't infer weak topics. It falls back to **popular problems around 1200**, spread across tags and ratings, until your submission history fills in.
+
+Press **`r`** after solving more problems to refresh recommendations.
 
 ---
 

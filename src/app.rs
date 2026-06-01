@@ -103,6 +103,17 @@ pub fn language_display(lang: &str) -> String {
     }
 }
 
+/// Normalize template text pasted from an editor or the terminal clipboard.
+pub fn normalize_template_text(text: &str) -> String {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    text.lines()
+        .map(|line| line.trim_end())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .trim()
+        .to_string()
+}
+
 /// Languages CPOS ships compile/run commands for, in a friendly display order.
 /// Used by the setup wizard and config picker.
 pub const LANGUAGES: [&str; 13] = [
@@ -242,6 +253,7 @@ pub struct App {
     pub setup_handle: String,
     pub setup_lang: String,
     pub setup_template: String,
+    pub setup_template_scroll: u16,
     pub setup_cses: String,
 }
 
@@ -305,6 +317,7 @@ impl App {
             setup_handle: String::new(),
             setup_lang: "cpp".to_string(),
             setup_template: String::new(),
+            setup_template_scroll: 0,
             setup_cses: String::new(),
         }
     }
@@ -322,6 +335,7 @@ impl App {
         self.setup_handle = self.config.cf_handle().unwrap_or("").to_string();
         self.setup_lang = self.config.default_language.clone();
         self.setup_template.clear();
+        self.setup_template_scroll = 0;
         self.setup_cses = self.config.cses_session.clone().unwrap_or_default();
     }
 
@@ -357,7 +371,8 @@ impl App {
             let tdir = root.join("templates");
             let _ = std::fs::create_dir_all(&tdir);
             let tpath = tdir.join(format!("template.{ext}"));
-            if std::fs::write(&tpath, &self.setup_template).is_ok() {
+            let content = normalize_template_text(&self.setup_template);
+            if std::fs::write(&tpath, content).is_ok() {
                 self.config.template_file = Some(tpath.to_string_lossy().to_string());
             }
         }
@@ -481,8 +496,12 @@ impl App {
             .rating_history
             .last()
             .map(|r| r.new_rating);
-        self.recommendations =
-            recommender::recommend_problems(&self.submissions, &self.problems, user_rating, 15);
+        self.recommendations = recommender::recommend_problems(
+            &self.submissions,
+            &self.problems,
+            user_rating,
+            recommender::DEFAULT_COUNT,
+        );
         if self.recommend_selected >= self.recommendations.len() {
             self.recommend_selected = 0;
         }
@@ -506,7 +525,26 @@ impl App {
         self.apply_filters();
         self.compute_analytics();
         self.compute_recommendations();
+
+        let contests = cache.get_contests(Platform::Codeforces)?;
+        self.set_contests(contests);
         Ok(())
+    }
+
+    /// Friendly status line after loading cached data (before any background sync).
+    pub fn note_cache_loaded(&mut self) {
+        if self.loading {
+            return;
+        }
+        if self.problems.is_empty() {
+            return;
+        }
+        let n_problems = self.problems.len();
+        let n_subs = self.submissions.len();
+        let n_contests = self.contests.len();
+        self.status_message = format!(
+            "Ready — {n_problems} problems, {n_subs} submissions, {n_contests} contests (cached)"
+        );
     }
 
     /// Number of consecutive days (ending today or yesterday) that have at
@@ -738,7 +776,8 @@ impl App {
     /// Order contests for display: running + upcoming first (soonest first),
     /// then the most recent finished contests (capped, since CF returns years
     /// of history).
-    pub fn set_contests(&mut self, contests: Vec<Contest>) {
+    pub fn set_contests(&mut self, mut contests: Vec<Contest>) {
+        refresh_contest_phases(&mut contests);
         let mut upcoming: Vec<Contest> = contests
             .iter()
             .filter(|c| c.phase != ContestPhase::Finished)
@@ -1010,6 +1049,23 @@ impl App {
     }
 }
 
+/// Recompute live/upcoming/finished from timestamps so cached contests stay
+/// accurate between syncs.
+fn refresh_contest_phases(contests: &mut [Contest]) {
+    let now = chrono::Utc::now();
+    for c in contests.iter_mut() {
+        let end = c.start_time
+            + chrono::Duration::seconds(c.duration_seconds as i64);
+        c.phase = if now < c.start_time {
+            ContestPhase::Before
+        } else if now < end {
+            ContestPhase::Running
+        } else {
+            ContestPhase::Finished
+        };
+    }
+}
+
 /// Fetch fresh data from the online judges and write it into the local cache.
 /// Runs on a background task; progress is reported back over `tx`. The UI
 /// thread reloads from the cache once `RefreshMsg::Done` arrives.
@@ -1070,6 +1126,7 @@ pub async fn fetch_and_cache(
     let _ = tx.send(RefreshMsg::Status("Fetching upcoming contests…".to_string()));
     match cf.fetch_contests().await {
         Ok(contests) => {
+            let _ = cache.upsert_contests(&contests);
             let _ = tx.send(RefreshMsg::Contests(contests));
         }
         Err(e) => {

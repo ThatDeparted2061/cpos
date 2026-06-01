@@ -3,6 +3,7 @@ pub mod config_view;
 pub mod contests;
 pub mod dashboard;
 pub mod problems;
+pub mod progress;
 pub mod recommend;
 pub mod setup;
 pub mod theme;

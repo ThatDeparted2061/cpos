@@ -63,6 +63,17 @@ impl Cache {
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS contests (
+                platform TEXT NOT NULL,
+                id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                duration_seconds INTEGER NOT NULL,
+                phase TEXT NOT NULL,
+                PRIMARY KEY (platform, id)
+            );
             ",
         )?;
         Ok(())
@@ -315,5 +326,76 @@ impl Cache {
             Some(Ok(val)) => Ok(Some(val)),
             _ => Ok(None),
         }
+    }
+
+    pub fn upsert_contests(&self, contests: &[Contest]) -> Result<()> {
+        let tx = self.conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM contests", [])?;
+        for c in contests {
+            let platform_str = format!("{:?}", c.platform);
+            let phase_str = format!("{:?}", c.phase);
+            tx.execute(
+                "INSERT INTO contests (platform, id, name, url, start_time, duration_seconds, phase)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    platform_str,
+                    c.id,
+                    c.name,
+                    c.url,
+                    c.start_time.to_rfc3339(),
+                    c.duration_seconds,
+                    phase_str,
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn get_contests(&self, platform: Platform) -> Result<Vec<Contest>> {
+        let platform_str = format!("{:?}", platform);
+        let mut stmt = self.conn.prepare(
+            "SELECT platform, id, name, url, start_time, duration_seconds, phase
+             FROM contests WHERE platform = ?1",
+        )?;
+        let rows = stmt.query_map(params![platform_str], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, u64>(5)?,
+                row.get::<_, String>(6)?,
+            ))
+        })?;
+
+        let mut contests = Vec::new();
+        for row in rows {
+            let (plat_str, id, name, url, start_str, duration_seconds, phase_str) = row?;
+            let platform = match plat_str.as_str() {
+                "Cses" => Platform::Cses,
+                "AtCoder" => Platform::AtCoder,
+                _ => Platform::Codeforces,
+            };
+            let phase = match phase_str.as_str() {
+                "Before" => ContestPhase::Before,
+                "Running" => ContestPhase::Running,
+                _ => ContestPhase::Finished,
+            };
+            let start_time = chrono::DateTime::parse_from_rfc3339(&start_str)
+                .map(|d| d.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+            contests.push(Contest {
+                platform,
+                id,
+                name,
+                url,
+                start_time,
+                duration_seconds,
+                phase,
+            });
+        }
+        Ok(contests)
     }
 }

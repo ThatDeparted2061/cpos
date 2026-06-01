@@ -2,6 +2,7 @@ use ratatui::prelude::*;
 use ratatui::widgets::*;
 
 use crate::app::App;
+use crate::ui::progress;
 use crate::ui::theme::Theme;
 
 const C: [&str; 5] = [" ████ ", "█     ", "█     ", "█     ", " ████ "];
@@ -13,7 +14,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(9),
+            Constraint::Length(10),
             Constraint::Length(6),
             Constraint::Min(6),
         ])
@@ -47,6 +48,8 @@ fn draw_banner(frame: &mut Frame, app: &App, area: Rect) {
         );
     }
 
+    lines.push(Line::from(""));
+
     let cf_handle = app.config.handles.get("codeforces").cloned().unwrap_or_default();
     let (cf_label, cf_color) = if cf_handle.is_empty() {
         ("not set".to_string(), t.dim)
@@ -76,32 +79,40 @@ fn draw_banner(frame: &mut Frame, app: &App, area: Rect) {
         .alignment(Alignment::Center),
     );
 
-    let capture_label = if let Some(port) = app.capture_port {
-        format!("listening on :{port}")
+    if let Some(port) = app.capture_port {
+        lines.push(
+            Line::from(vec![
+                Span::styled("Browser companion ", Style::default().fg(t.dim)),
+                Span::styled(
+                    format!("connected :{port}"),
+                    Style::default().fg(t.success).add_modifier(Modifier::BOLD),
+                ),
+            ])
+            .alignment(Alignment::Center),
+        );
     } else {
-        "off".to_string()
-    };
-    let capture_color = if app.capture_port.is_some() { t.success } else { t.dim };
-    lines.push(
-        Line::from(vec![
-            Span::styled("Browser companion ", Style::default().fg(t.dim)),
-            Span::styled(capture_label, Style::default().fg(capture_color).add_modifier(Modifier::BOLD)),
-            Span::styled("  — run ", Style::default().fg(t.dim)),
-            Span::styled("cpos setup-browser", Style::default().fg(t.accent_dim).add_modifier(Modifier::BOLD)),
-            Span::styled(" to install", Style::default().fg(t.dim)),
-        ])
-        .alignment(Alignment::Center),
-    );
+        lines.push(
+            Line::from(vec![
+                Span::styled("Browser companion ", Style::default().fg(t.dim)),
+                Span::styled("off", Style::default().fg(t.dim)),
+                Span::styled("  — install from ", Style::default().fg(t.dim)),
+                Span::styled(
+                    "Chrome Web Store",
+                    Style::default().fg(t.accent_dim).add_modifier(Modifier::BOLD),
+                ),
+            ])
+            .alignment(Alignment::Center),
+        );
+    }
 
     let root = crate::engine::workspace::root(&app.config);
     lines.push(
         Line::from(vec![
-            Span::styled("your solutions live in  ", Style::default().fg(t.dim)),
+            Span::styled("VS Code saves to your open folder  ·  terminal: ", Style::default().fg(t.dim)),
             Span::styled(
                 root.display().to_string(),
                 Style::default().fg(t.accent_dim).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("  — open this folder in your editor", Style::default().fg(t.dim)),
         ])
         .alignment(Alignment::Center),
     );
@@ -157,16 +168,24 @@ fn stat_card(frame: &mut Frame, app: &App, area: Rect, label: &str, value: &str,
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let para = Paragraph::new(vec![
+    let v = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),
+            Constraint::Length(2),
+            Constraint::Min(0),
+        ])
+        .split(inner);
+
+    let content = Paragraph::new(vec![
         Line::from(Span::styled(
             value.to_string(),
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
-        Line::from(""),
         Line::from(Span::styled(label, Style::default().fg(t.dim))).alignment(Alignment::Center),
     ]);
-    frame.render_widget(para, inner);
+    frame.render_widget(content, v[1]);
 }
 
 fn draw_lower(frame: &mut Frame, app: &App, area: Rect) {
@@ -189,7 +208,6 @@ fn draw_weak_tags(frame: &mut Frame, app: &App, area: Rect) {
         .tag_stats
         .iter()
         .filter(|s| s.solved + s.attempted >= 2)
-        .take(inner.height as usize)
         .collect();
 
     if weak.is_empty() {
@@ -200,32 +218,59 @@ fn draw_weak_tags(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    let lines: Vec<Line> = weak
-        .iter()
-        .map(|s| {
-            let total = s.solved + s.attempted;
-            let rate = if total > 0 {
-                (s.solved as f64 / total as f64 * 100.0) as u32
-            } else {
-                0
-            };
-            let bar_w = 12usize;
-            let filled = (rate as usize * bar_w / 100).min(bar_w);
-            let color = match rate {
-                0..=35 => t.danger,
-                36..=65 => t.warning,
-                _ => t.success,
-            };
-            Line::from(vec![
-                Span::styled(format!(" {:<16}", truncate(&s.tag, 16)), Style::default().fg(t.fg)),
-                Span::styled("█".repeat(filled), Style::default().fg(color)),
-                Span::styled(" ".repeat(bar_w - filled), Style::default()),
-                Span::styled(format!(" {rate:>3}%"), Style::default().fg(color)),
-            ])
-        })
-        .collect();
+    let max_rows = inner.height as usize;
+    for (i, s) in weak.iter().take(max_rows).enumerate() {
+        let row = Rect {
+            x: inner.x,
+            y: inner.y + i as u16,
+            width: inner.width,
+            height: 1,
+        };
+        if row.y >= inner.y + inner.height {
+            break;
+        }
 
-    frame.render_widget(Paragraph::new(lines), inner);
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(18),
+                Constraint::Length(progress::BAR_WIDTH as u16 + 1),
+                Constraint::Min(4),
+                Constraint::Length(5),
+            ])
+            .split(row);
+
+        let total = s.solved + s.attempted;
+        let rate = if total > 0 {
+            s.solved as f64 / total as f64
+        } else {
+            0.0
+        };
+        let rate_pct = (rate * 100.0).round() as u32;
+        let color = progress::rate_color(t, rate_pct);
+
+        frame.render_widget(
+            Paragraph::new(format!(" {}", truncate(&s.tag, 16)))
+                .style(Style::default().fg(t.fg)),
+            cols[0],
+        );
+
+        frame.render_widget(
+            Paragraph::new(progress::bar_line(
+                progress::BAR_WIDTH,
+                rate,
+                color,
+            )),
+            cols[1],
+        );
+
+        frame.render_widget(
+            Paragraph::new(format!("{rate_pct:>3}%"))
+                .style(Style::default().fg(color))
+                .alignment(Alignment::Right),
+            cols[3],
+        );
+    }
 }
 
 fn draw_up_next(frame: &mut Frame, app: &App, area: Rect) {
@@ -242,29 +287,33 @@ fn draw_up_next(frame: &mut Frame, app: &App, area: Rect) {
         return;
     }
 
-    let lines: Vec<Line> = app
+    let visible = inner.height as usize;
+    let rows: Vec<Row> = app
         .recommendations
         .iter()
-        .take(inner.height as usize)
+        .take(visible)
         .map(|rec| {
             let p = &rec.problem;
-            Line::from(vec![
-                Span::styled(
-                    format!(" {:>6} ", p.display_id()),
-                    Style::default()
-                        .fg(Theme::rating_color(p.rating))
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(truncate(&p.name, 26), Style::default().fg(t.fg)),
-                Span::styled(
-                    format!("  {}", p.difficulty_label()),
+            Row::new(vec![
+                Cell::from(Line::from(Span::styled(
+                    format!("  {}", p.display_id()),
                     Style::default().fg(t.dim),
-                ),
+                ))),
+                Cell::from(truncate(&p.name, 22)),
+                Cell::from(p.difficulty_label())
+                    .style(Style::default().fg(Theme::rating_color(p.rating))),
             ])
         })
         .collect();
 
-    frame.render_widget(Paragraph::new(lines), inner);
+    let widths = [
+        Constraint::Length(10),
+        Constraint::Min(6),
+        Constraint::Length(6),
+    ];
+
+    let table = Table::new(rows, widths);
+    frame.render_widget(table, inner);
 }
 
 fn truncate(s: &str, max: usize) -> String {

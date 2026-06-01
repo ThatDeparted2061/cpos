@@ -13,7 +13,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         let msg = if app.loading {
             "  Fetching contests…"
         } else {
-            "  Press 'r' to sync and load upcoming Codeforces contests."
+            "  No contests cached yet — syncing in the background…"
         };
         frame.render_widget(
             Paragraph::new(msg)
