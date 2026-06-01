@@ -7,10 +7,6 @@ Open a problem in your browser. CPOS creates the file, loads the samples, and le
 </p>
 
 <p align="center">
-  <i>Terminal to browse & plan · VS Code to code · Browser to capture & submit — one ecosystem, synced over localhost.</i>
-</p>
-
-<p align="center">
   <a href="https://cpos.sohamaggarwal.com"><img alt="Website" src="https://img.shields.io/badge/website-cpos-8b5cf6"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode"><img alt="VS Code" src="https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visualstudiocode&logoColor=white"></a>
   <a href="https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm"><img alt="Chrome" src="https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white"></a>
@@ -18,44 +14,52 @@ Open a problem in your browser. CPOS creates the file, loads the samples, and le
   <img alt="rust" src="https://img.shields.io/badge/built%20with-Rust-orange.svg">
 </p>
 
----
-
-## The ecosystem
-
-CPOS is **three pieces that plug into each other** — not three separate tools you choose between.
-
-| Piece | What it does |
-| --- | --- |
-| **[Browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)** | Reads samples from Codeforces/CSES pages, autofills submit |
-| **[Terminal app](#terminal--command-center)** | Browse the catalog, sync rating, contests, recommendations, analytics |
-| **[VS Code extension](#vs-code--code--tests)** | Write solutions, run samples, submit from a side panel |
-
-Install all three. They share the same files and stay in sync over `127.0.0.1` — no cloud, no account.
-
-**A typical session:**
-
-1. **`r`** in the terminal — sync your solves and rating from Codeforces/CSES
-2. Pick a problem from **Recommend** or search the catalog — without opening Codeforces in a tab
-3. **`o`** to open it — CPOS creates `1971D.cpp`, loads samples, opens your editor
-4. Or open the statement in your browser — the companion captures samples the same way
-5. Code in **VS Code**, run samples with **Run All** or **`T`**
-6. **Submit** from the panel or **`s`** in the terminal — the browser companion fills the judge form
-
-No copy-pasting samples. No manually creating files. No re-entering problem metadata.
-
 <p align="center">
-  <img src="docs/dashboard.png" alt="CPOS terminal dashboard — rating, streak, recommendations, and progress" width="820">
+  <img src="docs/dashboard.png" alt="CPOS dashboard" width="820">
 </p>
 
 ---
 
-## Terminal — command center
+## How it works
 
-The terminal is the **hub** of CPOS: where you browse problems, track progress, and decide what to grind next — without leaving the keyboard.
+CPOS has three parts — a **browser companion**, a **terminal app**, and a **VS Code extension**. Install all three; they share the same files and stay in sync over localhost.
+
+**The flow:**
+
+1. **Pick your folder** — open any folder in VS Code, or let the terminal app use `~/cpos`.
+2. **Open a problem in your browser** — any Codeforces or CSES problem page.
+3. **CPOS captures it** — the browser companion reads samples and sends them to CPOS on your machine.
+4. **A file appears** — e.g. `1971D.cpp`, with sample tests attached.
+5. **Write your solution** — in VS Code.
+6. **Run samples** — from the panel or with `T` in the terminal.
+7. **Submit** — CPOS autofills the judge form in your browser (log in to Codeforces/CSES first).
+
+No copying samples. No manually creating files.
+
+---
+
+## VS Code
+
+Write code in the editor. The CPOS panel runs samples and submits.
 
 <p align="center">
-  <img src="docs/dashboard.png" alt="CPOS terminal dashboard — rating, streak, recommendations, and progress" width="820">
+  <img src="docs/img/vscode-panel-ui.png" alt="CPOS VS Code panel with test cases, Run All, Submit, and a Codeforces solution open" width="900">
 </p>
+
+<p align="center"><sub>Panel layout inspired by <a href="https://marketplace.visualstudio.com/items?itemName=DivyanshuRaj.competitive-programming-helper">CPH</a> (Competitive Programming Helper).</sub></p>
+
+Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode). Open your folder, capture a problem from the browser, then use the **CPOS panel**:
+
+- **Run All** — compile and test every sample
+- **Submit** — autofill the judge submit page
+- **Problem** — jump back to the statement
+- **◑ theme** — switch the panel look (5 themes, see [Settings](#settings))
+
+---
+
+## Terminal
+
+Browse the catalog, sync rating, track contests, and get recommendations — without opening Codeforces in a tab.
 
 ```bash
 cargo install --git https://github.com/Soham109/cpos
@@ -73,33 +77,7 @@ cpos
 | `Tab` | Switch between Dashboard, Problems, Contests, Analytics, Recommend |
 | `r` | Sync with Codeforces and CSES |
 
-Dashboard, problem browser, contests, analytics, and recommendations all live here. Keep it running alongside VS Code — captures and submits work through either one.
-
-<p align="center">
-  <img src="docs/problems.png" alt="CPOS problem browser" width="410">
-  <img src="docs/analytics.png" alt="CPOS analytics" width="410">
-  <img src="docs/contests.png" alt="CPOS contests" width="410">
-  <img src="docs/recommend.png" alt="CPOS recommendations" width="410">
-</p>
-
----
-
-## VS Code — code & tests
-
-Write in the editor you already use. The CPOS panel handles samples, compile/run, and submit — synced with the terminal in the background.
-
-<p align="center">
-  <img src="docs/img/vscode-panel-ui.png" alt="CPOS VS Code panel with test cases, Run All, Submit, and a Codeforces solution open" width="900">
-</p>
-
-<p align="center"><sub>Panel layout inspired by <a href="https://marketplace.visualstudio.com/items?itemName=DivyanshuRaj.competitive-programming-helper">CPH</a> (Competitive Programming Helper).</sub></p>
-
-Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode). Open the folder you want files in, capture a problem from the browser, then use the **CPOS panel**:
-
-- **Run All** — compile and test every sample
-- **Submit** — autofill the judge submit page
-- **Problem** — jump back to the statement
-- **◑ theme** — switch the panel look (5 themes, see [Settings](#settings))
+Keep the terminal running while you code in VS Code — same captures, same submits, same progress.
 
 ---
 
@@ -107,24 +85,22 @@ Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemNa
 
 You choose where files go:
 
-- **VS Code:** open any project folder before you capture. CPOS creates `1971D.cpp` (or whatever the problem is) right inside it. No forced workspace, no extra setup.
+- **VS Code:** open any project folder before you capture. CPOS creates `1971D.cpp` (or whatever the problem is) right inside it.
 - **Terminal app:** defaults to `~/cpos/`, or point it at any directory you like.
 
-Change the save location anytime in **Settings → Extensions → CPOS** (`cpos.saveLocation`, `cpos.fixedDir`).
+Change the save location in **Settings → Extensions → CPOS** (`cpos.saveLocation`, `cpos.fixedDir`).
 
 ---
 
 ## Install
 
-Install the full stack — all three pieces are meant to run together.
-
 | What | Where |
 | --- | --- |
-| Terminal app | `cargo install --git https://github.com/Soham109/cpos` then run `cpos` |
 | Browser companion | [Chrome Web Store](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) (Chrome, Edge, Brave) |
 | VS Code extension | [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode) |
+| Terminal app | `cargo install --git https://github.com/Soham109/cpos` |
 
-The browser companion is required for capture and submit. The terminal and VS Code extension sync with each other automatically when both are running.
+Install all three for the full experience. The browser companion is required for capture and submit.
 
 ## Updating
 
@@ -134,11 +110,18 @@ The terminal app does **not** auto-update. Run:
 cpos update
 ```
 
-That pulls the latest version and reinstalls — whether you originally used `cargo install --git` or installed from a local clone. Your config and problem data are kept.
+That pulls the latest version and reinstalls. Your config and problem data are kept.
 
-**VS Code extension** — updates automatically from the Marketplace if **Extensions: Auto Update** is on. Otherwise open **Extensions → CPOS → Update**.
+**VS Code extension** — updates from the Marketplace automatically (or **Extensions → CPOS → Update**).
 
 **Browser companion** — updates automatically from the Chrome Web Store.
+
+<p align="center">
+  <img src="docs/problems.png" alt="Problems" width="410">
+  <img src="docs/analytics.png" alt="Analytics" width="410">
+  <img src="docs/contests.png" alt="Contests" width="410">
+  <img src="docs/recommend.png" alt="Recommendations" width="410">
+</p>
 
 ---
 
