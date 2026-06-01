@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CPOS — Competitive Programming Operating System</title>
+  <meta name="description" content="Browse Codeforces & CSES problems in the terminal. Capture samples, run tests, track rating, get recommendations. All local.">
+  <meta name="theme-color" content="#060608">
+  <link rel="icon" href="assets/icon128.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Instrument+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- icon sprite -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 9l3 3-3 3M11 15h7"/></symbol>
+    <symbol id="i-browser" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+    <symbol id="i-vscode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 7 4 12l4.5 5M15.5 7 20 12l-4.5 5M13.5 4.5l-3 15"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3-3"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M6 4h12v5a6 6 0 0 1-12 0V4z"/><path d="M10 20h4M12 15v5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polygon points="8,5 19,12 8,19"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></symbol>
+  </svg>
+
+  <header class="top">
+    <a href="#" class="logo">
+      <img src="assets/icon128.png" alt="" width="32" height="32">
+      CPOS
+    </a>
+    <nav>
+      <a href="https://github.com/Soham109/cpos" target="_blank" rel="noopener">GitHub</a>
+      <a href="#install">Install</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="showcase">
+      <div class="wrap">
+        <nav class="tabs" aria-label="Screens">
+          <button class="tab active" data-screen="dashboard">Dashboard</button>
+          <button class="tab" data-screen="problems">Problems</button>
+          <button class="tab" data-screen="contests">Contests</button>
+          <button class="tab" data-screen="analytics">Analytics</button>
+          <button class="tab" data-screen="recommend">Recommend</button>
+        </nav>
+        <p class="tab-caption" id="caption">Rating, streak, progress, and what to solve next.</p>
+        <div class="frame">
+          <img class="panel active" id="screen-dashboard" src="dashboard.png" width="1105" height="716" alt="Dashboard" decoding="async" fetchpriority="high">
+          <img class="panel" id="screen-problems" src="problems.png" width="1105" height="716" alt="Problems" decoding="async" loading="lazy">
+          <img class="panel" id="screen-contests" src="contests.png" width="1105" height="716" alt="Contests" decoding="async" loading="lazy">
+          <img class="panel" id="screen-analytics" src="analytics.png" width="1105" height="716" alt="Analytics" decoding="async" loading="lazy">
+          <img class="panel" id="screen-recommend" src="recommend.png" width="1105" height="716" alt="Recommend" decoding="async" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <section class="below">
+      <div class="wrap">
+        <div class="headline-block">
+          <p class="eyebrow">Competitive Programming Operating System</p>
+          <h1>Browse problems in the terminal.<br>Not on Codeforces.</h1>
+          <p class="sub">
+            Sync once. Search the full catalog, filter by rating, pick from recommendations —
+            all without opening a browser tab. Press <kbd>o</kbd> and CPOS creates your file,
+            loads samples, opens your editor.
+          </p>
+        </div>
+
+        <div class="pipeline">
+          <div class="pipe-step">
+            <div class="pipe-icon"><svg><use href="#i-sync"/></svg></div>
+            <div class="pipe-text"><strong>Sync</strong><span>Pull solves & catalog</span></div>
+          </div>
+          <div class="pipe-line"></div>
+          <div class="pipe-step">
+            <div class="pipe-icon"><svg><use href="#i-search"/></svg></div>
+            <div class="pipe-text"><strong>Browse</strong><span>Search & filter in TUI</span></div>
+          </div>
+          <div class="pipe-line"></div>
+          <div class="pipe-step">
+            <div class="pipe-icon"><svg><use href="#i-folder"/></svg></div>
+            <div class="pipe-text"><strong>Open</strong><span>File + samples ready</span></div>
+          </div>
+          <div class="pipe-line"></div>
+          <div class="pipe-step">
+            <div class="pipe-icon"><svg><use href="#i-play"/></svg></div>
+            <div class="pipe-text"><strong>Solve</strong><span>Test & submit</span></div>
+          </div>
+        </div>
+
+        <div class="feat-grid">
+          <div class="feat">
+            <div class="feat-icon"><svg><use href="#i-search"/></svg></div>
+            <h3>Problem browser</h3>
+            <p>Thousands of Codeforces & CSES problems locally. Search, filter, switch platforms — no website needed.</p>
+          </div>
+          <div class="feat">
+            <div class="feat-icon"><svg><use href="#i-target"/></svg></div>
+            <h3>Smart recommendations</h3>
+            <p>30 unsolved problems scored against your weak tags, rating fit, and unfinished attempts.</p>
+          </div>
+          <div class="feat">
+            <div class="feat-icon"><svg><use href="#i-trophy"/></svg></div>
+            <h3>Live contests</h3>
+            <p>Upcoming and running Codeforces contests with real-time countdowns.</p>
+          </div>
+          <div class="feat">
+            <div class="feat-icon"><svg><use href="#i-chart"/></svg></div>
+            <h3>Analytics</h3>
+            <p>Rating history, topic breakdown, activity heatmap — see where you're actually weak.</p>
+          </div>
+          <div class="feat">
+            <div class="feat-icon"><svg><use href="#i-download"/></svg></div>
+            <h3>Sample capture</h3>
+            <p>Browser companion reads public tests off the page when you visit a problem. Sent to localhost only.</p>
+          </div>
+          <div class="feat">
+            <div class="feat-icon"><svg><use href="#i-play"/></svg></div>
+            <h3>Run & submit</h3>
+            <p>Compile, test every sample, autofill the judge page. 13 languages supported.</p>
+          </div>
+        </div>
+
+        <div class="stack">
+          <article class="stack-card stack-main">
+            <div class="stack-head">
+              <div class="stack-icon"><svg><use href="#i-terminal"/></svg></div>
+              <div>
+                <span class="stack-tag">Core</span>
+                <h2>Terminal app</h2>
+              </div>
+            </div>
+            <p>Your CP command center. This is where you browse problems, track progress, and decide what to grind — keyboard-first, built in Rust.</p>
+            <div class="chips">
+              <span class="chip"><kbd>/</kbd> search</span>
+              <span class="chip"><kbd>f</kbd> filter</span>
+              <span class="chip"><kbd>p</kbd> platform</span>
+              <span class="chip"><kbd>o</kbd> open</span>
+              <span class="chip"><kbd>T</kbd> test</span>
+              <span class="chip"><kbd>s</kbd> submit</span>
+              <span class="chip"><kbd>r</kbd> sync</span>
+            </div>
+          </article>
+          <div class="stack-side">
+            <article class="stack-card">
+              <div class="stack-head">
+                <div class="stack-icon stack-icon-sm"><svg><use href="#i-browser"/></svg></div>
+                <div><h2>Browser</h2></div>
+              </div>
+              <p>Not for browsing — for capture & submit. Reads samples when you're on a page. Autofills the judge form.</p>
+            </article>
+            <article class="stack-card">
+              <div class="stack-head">
+                <div class="stack-icon stack-icon-sm"><svg><use href="#i-vscode"/></svg></div>
+                <div><h2>VS Code</h2></div>
+              </div>
+              <p>Optional editor panel. Run All, Submit, inline results. Syncs with the terminal. Your folder, your files.</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="install-block" id="install">
+      <div class="wrap">
+        <h2 class="install-title">Get started</h2>
+        <p class="install-sub">Browser + terminal is the core setup. Add VS Code if you want the panel.</p>
+        <div class="install-cards">
+          <a class="install-card" href="https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm" target="_blank" rel="noopener">
+            <div class="install-card-icon"><svg><use href="#i-browser"/></svg></div>
+            <div>
+              <strong>Browser companion</strong>
+              <span>Chrome · Edge · Brave</span>
+            </div>
+          </a>
+          <a class="install-card" href="https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode" target="_blank" rel="noopener">
+            <div class="install-card-icon"><svg><use href="#i-vscode"/></svg></div>
+            <div>
+              <strong>VS Code extension</strong>
+              <span>Marketplace</span>
+            </div>
+          </a>
+          <button class="install-card install-card-btn" data-copy="cargo install --git https://github.com/Soham109/cpos">
+            <div class="install-card-icon"><svg><use href="#i-terminal"/></svg></div>
+            <div>
+              <strong>Terminal app</strong>
+              <code>cargo install --git https://github.com/Soham109/cpos</code>
+            </div>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="wrap foot-inner">
+        <div class="foot-privacy">
+          <svg class="foot-lock"><use href="#i-lock"/></svg>
+          <p>Everything stays on your machine — <code>127.0.0.1</code>, no cloud, no account.</p>
+        </div>
+        <nav>
+          <a href="https://github.com/Soham109/cpos" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode" target="_blank" rel="noopener">VS Code</a>
+          <a href="https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm" target="_blank" rel="noopener">Chrome</a>
+        </nav>
+      </div>
+    </footer>
+  </main>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -11,8 +11,9 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-SS = 2  # supersample factor for crisp anti-aliasing
+SS = 3  # supersample factor for crisp anti-aliasing
 SIZE = 17
+DPI_SCALE = 2  # 2× output for retina displays
 FONT_CANDIDATES = [
     "/System/Library/Fonts/Menlo.ttc",
     "/System/Library/Fonts/Monaco.ttf",
@@ -97,8 +98,11 @@ def render(grid, out_path, title):
             if cell.get("b"):
                 draw.text((px + SS, py), symbol, font=font, fill=fg)
 
-    img = img.resize((W // SS, H // SS), Image.LANCZOS)
-    img.save(out_path)
+    img = img.resize(
+        ((W // SS) * DPI_SCALE, (H // SS) * DPI_SCALE),
+        Image.LANCZOS,
+    )
+    img.save(out_path, optimize=True)
     print(f"rendered {out_path}")
 
 
