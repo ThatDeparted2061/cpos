@@ -43,6 +43,8 @@ Click **◑ theme** in the panel header to change how the panel looks. Your choi
 
 By default, files are created in **whatever folder you currently have open** in VS Code.
 
+Submit opens the judge in your browser; the [CPOS browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) fills the form and clicks Submit (reload the unpacked extension from this repo once if Codeforces autofill fails).
+
 ## Links
 
 - [CPOS on GitHub](https://github.com/Soham109/cpos)

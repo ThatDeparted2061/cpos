@@ -246,13 +246,55 @@
     }
   }
 
+  function findProblemCodeInput() {
+    const el = document.querySelector('input[name="submittedProblemCode"]');
+    return el instanceof HTMLInputElement ? el : null;
+  }
+
+  function findProblemIndexSelect() {
+    return document.querySelector('select[name="submittedProblemIndex"]');
+  }
+
+  function cfProblemId(pending) {
+    if (pending?.id) return String(pending.id);
+    if (pending?.contest && pending?.index) return `${pending.contest}${pending.index}`;
+    return cfIndexFromUrl() || "";
+  }
+
+  function setProblemField(pending, fireChange = false) {
+    const fullId = cfProblemId(pending);
+    const input = findProblemCodeInput();
+    if (input && fullId) {
+      input.value = fullId;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      if (fireChange) input.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+    const select = findProblemIndexSelect();
+    if (select && pending.index) {
+      return setProblemSelect(select, pending.index, pending.id, fireChange);
+    }
+    return false;
+  }
+
+  function getCfAceEditor() {
+    if (typeof window.ace === "undefined" || typeof window.ace.edit !== "function") {
+      return null;
+    }
+    try {
+      return window.ace.edit("editor");
+    } catch {
+      return null;
+    }
+  }
+
+  function aceEditorReady() {
+    const ed = getCfAceEditor();
+    return !!ed && typeof ed.setValue === "function";
+  }
+
   function findProblemSelect() {
-    return (
-      document.querySelector('select[name="submittedProblemCode"]') ||
-      document.querySelector('select[name="submittedProblemIndex"]') ||
-      document.querySelector("#submittedProblemCode") ||
-      document.querySelector("#submittedProblemIndex")
-    );
+    return findProblemIndexSelect() || findProblemCodeInput();
   }
 
   function findLangSelect() {
@@ -354,44 +396,38 @@
   }
 
   function getSourceCode() {
+    const editor = getCfAceEditor();
+    if (editor) {
+      const v = editor.getValue();
+      if (v?.trim()) return v;
+    }
+
     const src = findSourceTextarea();
     if (src?.value?.trim()) return src.value;
 
     const editorDiv = document.querySelector("#editor");
     if (editorDiv?.env?.editor) {
       const v = editorDiv.env.editor.getValue();
-      if (v && v.trim()) return v;
+      if (v?.trim()) return v;
     }
-    if (window.ace) {
-      try {
-        const host = document.querySelector("#editor") || document.querySelector(".ace_editor");
-        if (host) {
-          const v = window.ace.edit(host).getValue();
-          if (v && v.trim()) return v;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    const aceInput = document.querySelector("textarea.ace_text-input");
-    return aceInput?.value?.trim() ? aceInput.value : "";
+    return "";
   }
 
   function syncAceDisplay(code) {
-    const editorDiv = document.querySelector("#editor");
-    if (editorDiv?.env?.editor) {
+    const editor = getCfAceEditor();
+    if (editor) {
       try {
-        const ed = editorDiv.env.editor;
-        ed.setValue(code, -1);
-        ed.clearSelection();
-        return;
+        editor.setValue(code, -1);
+        editor.clearSelection();
+        editor.resize();
       } catch {
         /* fall through */
       }
     }
-    if (window.ace && typeof window.ace.edit === "function" && editorDiv) {
+    const editorDiv = document.querySelector("#editor");
+    if (editorDiv?.env?.editor) {
       try {
-        const ed = window.ace.edit(editorDiv);
+        const ed = editorDiv.env.editor;
         ed.setValue(code, -1);
         ed.clearSelection();
       } catch {
@@ -403,36 +439,30 @@
   function setSourceCode(code) {
     if (!code) return false;
 
+    syncAceDisplay(code);
+
     const textarea = findSourceTextarea();
     if (textarea) {
       textarea.value = code;
-      syncAceDisplay(code);
-      return textarea.value.trim().length > 0;
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      textarea.dispatchEvent(new Event("change", { bubbles: true }));
+      if (window.jQuery) {
+        window.jQuery(textarea).val(code).trigger("change");
+      }
     }
 
-    syncAceDisplay(code);
-    return getSourceCode().trim().length > 0;
+    return getSourceCode().trim().length > 0 || !!textarea?.value?.trim();
   }
 
   function clickCodeforcesSubmit() {
-    const selectors = [
-      'form.submit-form input[type="submit"]',
-      ".submit",
-      "#singlePageSubmitButton",
-      'input[type="submit"].submit',
-      ".submit input[type='submit']",
-      "input.submit",
-      'input[type="submit"][value="Submit"]',
-      'input[type="submit"][value*="Submit"]',
-      'button[type="submit"]'
-    ];
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el && !el.disabled) {
-        el.disabled = false;
-        el.click();
-        return true;
-      }
+    const btn =
+      document.getElementById("singlePageSubmitButton") ||
+      document.querySelector('input.submit[type="submit"]') ||
+      document.querySelector('form.submit-form input[type="submit"]');
+    if (btn && !btn.disabled) {
+      btn.disabled = false;
+      btn.click();
+      return true;
     }
     return clickSubmitButton();
   }
@@ -468,26 +498,35 @@
     const csrf = getCfCsrf();
     if (!basePath || !csrf) return false;
 
-    const problemSelect = findProblemSelect();
     const langSelect = findLangSelect();
-    const index =
-      (problemSelect && problemSelect.value) ||
-      pending.index ||
-      cfIndexFromUrl();
+    const codeInput = findProblemCodeInput();
+    const problemSelect = findProblemIndexSelect();
     const programTypeId =
       (langSelect && langSelect.value) ||
       (pending.language && CF_LANGUAGE_IDS[pending.language] != null
         ? String(CF_LANGUAGE_IDS[pending.language])
         : null);
     const source = pending.code;
-    if (!index || !programTypeId || !source.trim()) return false;
+    if (!programTypeId || !source.trim()) return false;
 
-    const problemField =
-      (problemSelect && problemSelect.name) || "submittedProblemIndex";
+    let problemField;
+    let problemValue;
+    if (codeInput) {
+      problemField = "submittedProblemCode";
+      problemValue = codeInput.value || cfProblemId(pending);
+    } else if (problemSelect) {
+      problemField = problemSelect.name || "submittedProblemIndex";
+      problemValue = problemSelect.value || pending.index || cfIndexFromUrl();
+    } else {
+      problemField = "submittedProblemIndex";
+      problemValue = pending.index || cfIndexFromUrl();
+    }
+    if (!problemValue) return false;
+
     const body = new URLSearchParams();
     body.set("csrf_token", csrf);
     body.set("action", "submitSolutionFormSubmitted");
-    body.set(problemField, index);
+    body.set(problemField, problemValue);
     body.set("programTypeId", programTypeId);
     body.set("source", source);
 
@@ -507,18 +546,19 @@
   }
 
   function fillCodeforcesDom(pending) {
-    const textarea = findSourceTextarea();
-    const langSelect = findLangSelect();
-    const problemSelect = findProblemSelect();
-    if (!textarea) return false;
-
-    textarea.value = pending.code;
-    if (langSelect) pickLanguage(langSelect, pending.language, false);
-    if (problemSelect && pending.index) {
-      setProblemSelect(problemSelect, pending.index, pending.id, false);
+    if (findLangSelect() && pending.language) {
+      pickLanguage(findLangSelect(), pending.language, true);
     }
-    syncAceDisplay(pending.code);
-    return textarea.value.trim().length > 0;
+    setProblemField(pending, true);
+    return setSourceCode(pending.code);
+  }
+
+  async function prepareCodeforcesForm(pending) {
+    setProblemField(pending, true);
+    if (findLangSelect() && pending.language) {
+      pickLanguage(findLangSelect(), pending.language, true);
+    }
+    await sleep(600);
   }
 
   function isCodeforcesSubmitPage() {
@@ -533,7 +573,8 @@
             type: "cpos-cf-submit",
             code: pending.code,
             languageId: CF_LANGUAGE_IDS[pending.language] ?? null,
-            problemIndex: pending.index ?? cfIndexFromUrl() ?? null
+            problemIndex: pending.index ?? cfIndexFromUrl() ?? null,
+            problemId: pending.id ?? null
           },
           (resp) => {
             if (chrome.runtime.lastError) {
@@ -591,6 +632,14 @@
       const hasLang = langSelect && langSelect.options.length > 1;
 
       if (hasCsrf && (hasLang || attempt > 3)) {
+        await prepareCodeforcesForm(pending);
+
+        const editorReady = aceEditorReady() || !!findSourceTextarea();
+        if (!editorReady && attempt < 55) {
+          await sleep(300);
+          continue;
+        }
+
         // 1) Direct POST — no Ace/textarea needed.
         try {
           if (await postCodeforcesSubmit(pending)) {
@@ -611,12 +660,16 @@
         }
         lastReason = injected.reason || "inject-failed";
 
-        // 3) DOM fallback — write hidden textarea, click Submit.
-        if (fillCodeforcesDom(pending) && clickCodeforcesSubmit()) {
-          await ackSubmit();
-          toast(`CPOS · submitted ${pending.id}`, true);
-          return true;
+        // 3) DOM fallback — write source, verify, click Submit.
+        if (fillCodeforcesDom(pending)) {
+          await sleep(200);
+          if (getSourceCode().trim() && clickCodeforcesSubmit()) {
+            await ackSubmit();
+            toast(`CPOS · submitted ${pending.id}`, true);
+            return true;
+          }
         }
+        lastReason = "dom-fill-failed";
       }
 
       await sleep(300);

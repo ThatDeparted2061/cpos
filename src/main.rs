@@ -19,23 +19,30 @@ use cpos::engine::capture::{self, CaptureMsg};
 use cpos::engine::workspace;
 use cpos::ui;
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    match std::env::args().nth(1).as_deref() {
-        Some("setup-browser") => return setup_browser_command(),
-        Some("update") => return cpos::engine::update::run(),
-        Some("help" | "--help" | "-h") => {
-            print_help();
-            return Ok(());
+fn main() -> Result<()> {
+    if let Some(cmd) = std::env::args().nth(1) {
+        match cmd.trim().to_ascii_lowercase().as_str() {
+            "setup-browser" => return setup_browser_command(),
+            "update" => return cpos::engine::update::run(),
+            "help" | "--help" | "-h" => {
+                print_help();
+                return Ok(());
+            }
+            _ => {
+                eprintln!("Unknown command: {cmd}");
+                eprintln!("Run `cpos help` for usage.");
+                std::process::exit(1);
+            }
         }
-        Some(cmd) => {
-            eprintln!("Unknown command: {cmd}");
-            eprintln!("Run `cpos help` for usage.");
-            std::process::exit(1);
-        }
-        None => {}
     }
 
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run_tui())
+}
+
+async fn run_tui() -> Result<()> {
     let config = Config::load()?;
     let mut app = App::new(config);
 

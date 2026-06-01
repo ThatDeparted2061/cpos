@@ -926,21 +926,19 @@ async function submitActiveFile(): Promise<void> {
     return;
   }
 
+  const lang = languageForFile(source);
+  const cf = parseCodeforcesId(meta.id);
+  const taskId = isCsesPlatform(meta.platform) ? csesTaskId(meta) : undefined;
+
   const submitUrl = submitUrlFor(meta);
   if (!submitUrl) {
     vscode.window.showWarningMessage(`Submit is not supported for ${meta.platform}.`);
     return;
   }
 
-  const lang = languageForFile(source);
-  const cf = parseCodeforcesId(meta.id);
-  const taskId = isCsesPlatform(meta.platform) ? csesTaskId(meta) : undefined;
-
-  // Queue for the browser companion to fill the submit form (problem, language,
-  // code). Clipboard is kept as a fallback if autofill misses.
   pendingSubmit = {
     platform: meta.platform,
-    id: taskId ?? meta.id,
+    id: isCsesPlatform(meta.platform) ? (taskId ?? meta.id) : meta.id,
     contest: cf.contest,
     index: cf.index,
     code,

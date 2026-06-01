@@ -102,66 +102,258 @@ async function findOrOpenTab(url) {
 }
 
 // Runs in Codeforces page MAIN world.
-async function cposSubmitOnPage(code, languageId, problemIndex) {
+async function cposSubmitOnPage(code, languageId, problemIndex, problemId) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  for (let i = 0; i < 40; i++) {
-    const textarea =
+  function findTextarea() {
+    return (
       document.getElementById("sourceCodeTextarea") ||
-      document.querySelector('textarea[name="source"]');
+      document.querySelector('textarea[name="source"]') ||
+      document.querySelector('textarea[name="sourceCode"]')
+    );
+  }
 
-    const lang =
+  function findLang() {
+    return (
       document.querySelector('select[name="programTypeId"]') ||
-      document.getElementById("programTypeId");
+      document.getElementById("programTypeId")
+    );
+  }
 
-    if (textarea && lang && lang.options.length > 1) {
-      if (languageId != null) {
-        for (const opt of lang.options) {
-          if (opt.value === String(languageId)) {
-            lang.value = opt.value;
-            break;
-          }
-        }
+  function findProblemCodeInput() {
+    const el = document.querySelector('input[name="submittedProblemCode"]');
+    return el instanceof HTMLInputElement ? el : null;
+  }
+
+  function findProblemIndexSelect() {
+    return document.querySelector('select[name="submittedProblemIndex"]');
+  }
+
+  function problemCode() {
+    if (problemId) return String(problemId);
+    if (problemIndex) return String(problemIndex);
+    return indexFromUrl() || "";
+  }
+
+  function getAceEditor() {
+    if (typeof window.ace === "undefined" || typeof window.ace.edit !== "function") {
+      return null;
+    }
+    try {
+      return window.ace.edit("editor");
+    } catch {
+      return null;
+    }
+  }
+
+  function aceReady() {
+    const ed = getAceEditor();
+    return !!ed && typeof ed.setValue === "function";
+  }
+
+  function getCsrf() {
+    return (
+      document.querySelector('meta[name="X-Csrf-Token"]')?.getAttribute("content") ||
+      document.querySelector(".csrf-token[data-csrf]")?.getAttribute("data-csrf") ||
+      document.querySelector('[name="csrf_token"]')?.value ||
+      null
+    );
+  }
+
+  function readSource() {
+    const ed = getAceEditor();
+    if (ed) {
+      const v = ed.getValue();
+      if (v?.trim()) return v;
+    }
+    const textarea = findTextarea();
+    if (textarea?.value?.trim()) return textarea.value;
+    return "";
+  }
+
+  function writeSource(text) {
+    const ed = getAceEditor();
+    if (ed) {
+      ed.setValue(text, -1);
+      ed.clearSelection();
+      ed.resize();
+    }
+    const textarea = findTextarea();
+    if (textarea) {
+      textarea.value = text;
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      textarea.dispatchEvent(new Event("change", { bubbles: true }));
+      if (window.jQuery) {
+        window.jQuery(textarea).val(text).trigger("change");
       }
+    }
+  }
 
-      const prob =
-        document.querySelector('select[name="submittedProblemIndex"]') ||
-        document.querySelector('select[name="submittedProblemCode"]');
-      if (prob && problemIndex) {
-        const want = String(problemIndex).toUpperCase();
-        for (const opt of prob.options) {
-          const val = (opt.value || "").toUpperCase();
-          const text = (opt.textContent || "").trim().toUpperCase();
-          if (val === want || text.startsWith(want) || val.includes(want)) {
-            prob.value = opt.value;
-            break;
-          }
-        }
+  function setProblemField() {
+    const fullId = problemCode();
+    const input = findProblemCodeInput();
+    if (input && fullId) {
+      input.value = fullId;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+    const select = findProblemIndexSelect();
+    if (select && problemIndex) {
+      setProblem(select, problemIndex);
+      return true;
+    }
+    return false;
+  }
+
+  function setProblem(prob, idx) {
+    if (!prob || !idx) return;
+    const want = String(idx).toUpperCase();
+    for (const opt of prob.options) {
+      const val = (opt.value || "").toUpperCase();
+      const text = (opt.textContent || "").trim().toUpperCase();
+      if (val === want || text.startsWith(want) || val.includes(want)) {
+        prob.value = opt.value;
+        prob.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
       }
+    }
+  }
 
-      textarea.value = code;
-      const editorDiv = document.getElementById("editor");
-      if (editorDiv?.env?.editor) {
-        try {
-          editorDiv.env.editor.setValue(code, -1);
-          editorDiv.env.editor.clearSelection();
-        } catch {
-          /* ignore */
-        }
+  function setLanguage(lang, id) {
+    if (!lang || id == null) return;
+    for (const opt of lang.options) {
+      if (opt.value === String(id)) {
+        lang.value = opt.value;
+        lang.dispatchEvent(new Event("change", { bubbles: true }));
+        return;
       }
+    }
+  }
 
-      await sleep(100);
+  function submitBasePath() {
+    const p = location.pathname;
+    const patterns = [
+      /^(\/contest\/\d+\/submit)/,
+      /^(\/gym\/\d+\/submit)/,
+      /^(\/group\/[^/]+\/contest\/\d+\/submit)/,
+      /^(\/edu\/[^/]+\/lesson\/[^/]+\/[^/]+\/practice\/contest\/\d+\/submit)/,
+      /^(\/problemset\/submit)/
+    ];
+    for (const re of patterns) {
+      const m = p.match(re);
+      if (m) return m[1];
+    }
+    return null;
+  }
 
-      const btn =
-        document.querySelector('form.submit-form input[type="submit"]') ||
-        document.querySelector(".submit") ||
-        document.querySelector('input[type="submit"]');
-      if (!btn) return { ok: false, reason: "no-submit-btn" };
+  function indexFromUrl() {
+    const params = new URLSearchParams(location.search);
+    return params.get("submittedProblemIndex") || params.get("submittedProblemCode") || null;
+  }
+
+  async function tryPost() {
+    const basePath = submitBasePath();
+    const csrf = getCsrf();
+    if (!basePath || !csrf) return false;
+
+    const lang = findLang();
+    const codeInput = findProblemCodeInput();
+    const problemSelect = findProblemIndexSelect();
+    const programTypeId =
+      (lang && lang.value) || (languageId != null ? String(languageId) : null);
+    if (!programTypeId || !String(code).trim()) return false;
+
+    let problemField;
+    let problemValue;
+    if (codeInput) {
+      problemField = "submittedProblemCode";
+      problemValue = codeInput.value || problemCode();
+    } else if (problemSelect) {
+      problemField = problemSelect.name || "submittedProblemIndex";
+      problemValue = problemSelect.value || problemIndex || indexFromUrl();
+    } else {
+      problemField = "submittedProblemIndex";
+      problemValue = problemIndex || indexFromUrl();
+    }
+    if (!problemValue) return false;
+
+    const body = new URLSearchParams();
+    body.set("csrf_token", csrf);
+    body.set("action", "submitSolutionFormSubmitted");
+    body.set(problemField, problemValue);
+    body.set("programTypeId", programTypeId);
+    body.set("source", code);
+
+    const res = await fetch(`${basePath}?csrf_token=${encodeURIComponent(csrf)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Csrf-Token": csrf,
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: body.toString(),
+      credentials: "include",
+      redirect: "follow"
+    });
+    return res.ok || res.redirected;
+  }
+
+  function clickSubmit() {
+    const btn =
+      document.getElementById("singlePageSubmitButton") ||
+      document.querySelector('input.submit[type="submit"]') ||
+      document.querySelector('form.submit-form input[type="submit"]');
+    if (btn && !btn.disabled) {
       btn.disabled = false;
       btn.click();
-      return { ok: true };
+      return true;
     }
-    await sleep(200);
+    const form =
+      document.querySelector("form.submit-form") ||
+      document.querySelector('form[action*="submit"]');
+    if (form && typeof form.requestSubmit === "function") {
+      form.requestSubmit();
+      return true;
+    }
+    return false;
+  }
+
+  for (let i = 0; i < 55; i++) {
+    const lang = findLang();
+    if (!lang || lang.options.length <= 1) {
+      await sleep(200);
+      continue;
+    }
+
+    setProblemField();
+    if (languageId != null) setLanguage(lang, languageId);
+    await sleep(i < 3 ? 600 : 250);
+
+    if (!aceReady() && !findTextarea() && i < 50) {
+      await sleep(200);
+      continue;
+    }
+
+    try {
+      if (await tryPost()) return { ok: true };
+    } catch {
+      /* fall through to DOM fill */
+    }
+
+    writeSource(code);
+    await sleep(250);
+    if (!readSource().trim()) {
+      writeSource(code);
+      await sleep(250);
+    }
+    if (!readSource().trim()) {
+      await sleep(200);
+      continue;
+    }
+
+    if (clickSubmit()) return { ok: true };
+    return { ok: false, reason: "no-submit-btn" };
   }
   return { ok: false, reason: "form-timeout" };
 }
@@ -251,7 +443,7 @@ async function handleCodeforces(pending, _endpoint) {
     target: { tabId: tab.id, allFrames: false },
     world: "MAIN",
     func: cposSubmitOnPage,
-    args: [pending.code, languageId, problemIndex]
+    args: [pending.code, languageId, problemIndex, pending.id || null]
   });
 
   return results?.[0]?.result?.ok === true;
@@ -277,15 +469,16 @@ async function pollOnce() {
   if (!found) return;
 
   handling = true;
-  await ack(found.endpoint);
   try {
     const { data: pending } = found;
     const platform = String(pending.platform || "").toLowerCase();
+    let ok = false;
     if (platform === "codeforces" || platform === "cf") {
-      await handleCodeforces(pending, found.endpoint);
+      ok = await handleCodeforces(pending, found.endpoint);
     } else if (platform === "cses") {
-      await handleCses(pending, found.endpoint);
+      ok = await handleCses(pending, found.endpoint);
     }
+    if (ok) await ack(found.endpoint);
   } finally {
     handling = false;
   }
@@ -303,7 +496,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         target: { tabId, allFrames: false },
         world: "MAIN",
         func: cposSubmitOnPage,
-        args: [msg.code, msg.languageId ?? null, msg.problemIndex ?? null]
+        args: [msg.code, msg.languageId ?? null, msg.problemIndex ?? null, msg.problemId ?? null]
       })
       .then((results) => {
         sendResponse(results?.[0]?.result || { ok: false, reason: "empty-result" });
