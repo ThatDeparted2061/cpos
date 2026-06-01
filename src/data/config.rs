@@ -125,6 +125,31 @@ impl Config {
             if changed {
                 let _ = config.save();
             }
+            // Drop stale editor commands that spam "command not found" in the
+            // terminal (common when `code` isn't on PATH).
+            if config
+                .editor
+                .as_deref()
+                .is_some_and(|e| e.contains("code") || e.contains("cursor"))
+            {
+                let prog = config
+                    .editor
+                    .as_deref()
+                    .and_then(|e| e.split_whitespace().next())
+                    .unwrap_or("");
+                if !prog.is_empty() {
+                    let ok = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(format!("command -v {prog} >/dev/null 2>&1"))
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+                    if !ok {
+                        config.editor = None;
+                        let _ = config.save();
+                    }
+                }
+            }
             Ok(config)
         } else {
             let config = Config::default();

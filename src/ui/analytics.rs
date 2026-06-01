@@ -4,7 +4,6 @@ use ratatui::widgets::*;
 use crate::app::App;
 use crate::data::models::Verdict;
 use crate::ui::progress;
-use crate::ui::theme::Theme;
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
@@ -50,7 +49,7 @@ fn draw_rating_graph(frame: &mut Frame, app: &App, area: Rect) {
         Span::styled(
             format!(" {current} "),
             Style::default()
-                .fg(Theme::rating_color(Some(current)))
+                .fg(app.theme.rating_color(Some(current)))
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(format!("peak {max_r}"), Style::default().fg(t.dim)),
@@ -92,7 +91,7 @@ fn draw_rating_graph(frame: &mut Frame, app: &App, area: Rect) {
         if x0 + bar_w > chart.x + chart.width {
             break;
         }
-        let color = Theme::rating_color(Some(rating));
+        let color = app.theme.rating_color(Some(rating));
         for dy in 0..bar_height {
             let y = baseline_y.saturating_sub(dy);
             if y < chart.y {

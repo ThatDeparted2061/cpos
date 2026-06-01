@@ -172,7 +172,7 @@ Press **`r`** after solving more problems to refresh recommendations.
 
 ```toml
 default_language = "cpp"
-theme = "purple"
+theme = "purple"   # purple | cyan | green | amber | mono | plain
 editor = "code {file}"
 
 [handles]

@@ -12,7 +12,6 @@ use ratatui::prelude::*;
 use ratatui::widgets::*;
 
 use crate::app::{App, Tab};
-use theme::Theme;
 
 /// Rotating-arc spinner shown while data is syncing.
 pub const SPINNER: [&str; 6] = ["◜", "◠", "◝", "◞", "◡", "◟"];
@@ -87,7 +86,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         Some(r) => Span::styled(
             format!("CF {r}"),
             Style::default()
-                .fg(Theme::rating_color(Some(r)))
+                .fg(app.theme.rating_color(Some(r)))
                 .add_modifier(Modifier::BOLD),
         ),
         None => Span::styled("CF —", Style::default().fg(t.dim)),

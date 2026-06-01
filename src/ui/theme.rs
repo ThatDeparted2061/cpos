@@ -7,6 +7,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Padding};
 /// the app always reads cleanly.
 #[derive(Debug, Clone, Copy)]
 pub struct Theme {
+    pub id: &'static str,
     pub bg: Color,
     pub fg: Color,
     pub dim: Color,
@@ -26,10 +27,11 @@ impl Default for Theme {
 }
 
 impl Theme {
-    pub const NAMES: [&'static str; 5] = ["purple", "cyan", "green", "amber", "mono"];
+    pub const NAMES: [&'static str; 6] = ["purple", "cyan", "green", "amber", "mono", "plain"];
 
     pub fn from_name(name: &str) -> Theme {
         let base = Theme {
+            id: "purple",
             bg: Color::Rgb(13, 13, 20),
             fg: Color::Rgb(214, 214, 224),
             dim: Color::Rgb(108, 108, 132),
@@ -44,31 +46,65 @@ impl Theme {
 
         match name {
             "cyan" => Theme {
+                id: "cyan",
                 accent: Color::Rgb(86, 182, 194),
                 accent_dim: Color::Rgb(58, 130, 140),
                 highlight_bg: Color::Rgb(20, 46, 52),
                 ..base
             },
             "green" => Theme {
+                id: "green",
                 accent: Color::Rgb(126, 231, 135),
                 accent_dim: Color::Rgb(82, 160, 92),
                 highlight_bg: Color::Rgb(22, 46, 28),
                 ..base
             },
             "amber" => Theme {
+                id: "amber",
                 accent: Color::Rgb(240, 180, 80),
                 accent_dim: Color::Rgb(170, 122, 48),
                 highlight_bg: Color::Rgb(48, 38, 16),
                 ..base
             },
             "mono" => Theme {
+                id: "mono",
                 accent: Color::Rgb(200, 200, 214),
                 accent_dim: Color::Rgb(130, 130, 150),
                 highlight_bg: Color::Rgb(40, 40, 50),
                 ..base
             },
+            // Neutral grayscale — low contrast accents, no purple tint in the canvas.
+            "plain" => Theme {
+                id: "plain",
+                bg: Color::Rgb(16, 16, 16),
+                fg: Color::Rgb(224, 224, 224),
+                dim: Color::Rgb(128, 128, 128),
+                border: Color::Rgb(56, 56, 56),
+                accent: Color::Rgb(208, 208, 208),
+                accent_dim: Color::Rgb(152, 152, 152),
+                highlight_bg: Color::Rgb(36, 36, 36),
+                success: Color::Rgb(168, 196, 168),
+                warning: Color::Rgb(196, 188, 156),
+                danger: Color::Rgb(196, 160, 160),
+            },
             _ => base,
         }
+    }
+
+    /// Problem rating color — grayscale steps on the plain theme, CF colors otherwise.
+    pub fn rating_color(&self, rating: Option<u32>) -> Color {
+        if self.id == "plain" {
+            return match rating {
+                Some(r) if r >= 2400 => Color::Rgb(220, 220, 220),
+                Some(r) if r >= 1900 => Color::Rgb(200, 200, 200),
+                Some(r) if r >= 1600 => Color::Rgb(180, 180, 180),
+                Some(r) if r >= 1400 => Color::Rgb(168, 168, 168),
+                Some(r) if r >= 1200 => Color::Rgb(156, 156, 156),
+                Some(_) => Color::Rgb(144, 144, 144),
+                None => Color::Rgb(120, 120, 120),
+            };
+        }
+        Self::cf_rating_color(rating)
     }
 
     pub fn next_name(current: &str) -> &'static str {
@@ -122,9 +158,8 @@ impl Theme {
             .add_modifier(Modifier::BOLD)
     }
 
-    /// Codeforces-style rating colors. These are intentionally NOT themed:
-    /// they carry meaning that competitive programmers already recognize.
-    pub fn rating_color(rating: Option<u32>) -> Color {
+    /// Codeforces-style rating colors (full saturation).
+    pub fn cf_rating_color(rating: Option<u32>) -> Color {
         match rating {
             Some(r) if r >= 2400 => Color::Rgb(255, 76, 76),
             Some(r) if r >= 2100 => Color::Rgb(255, 140, 60),

@@ -30,6 +30,7 @@ async fn main() -> Result<()> {
     let mut app = App::new(config);
 
     let _ = app.load_from_cache().await;
+    app.restore_session();
     app.note_cache_loaded();
 
     // Start the browser companion capture listener.
@@ -331,11 +332,15 @@ fn drain_captures(app: &mut App) {
                 if !tests.is_empty() {
                     let _ = workspace::save_tests(&app.config, &problem, &tests);
                 }
-                if let Some(path) = external {
+                if let Some(ref path) = external {
                     app.set_solution_path(&problem, PathBuf::from(path));
                 }
 
-                let _ = app.start_problem_from_capture(problem);
+                let _ = app.start_problem_from_capture(problem.clone());
+                app.persist_session(
+                    &problem,
+                    external.as_deref().map(Path::new),
+                );
             }
             CaptureMsg::CsesProgress(progress) => {
                 let n = progress.solved.len();
@@ -511,36 +516,54 @@ fn open_url(url: &str) {
     let _ = std::process::Command::new("open").arg(url).spawn();
 }
 
-/// Open a file in the user's editor. Uses the configured `editor` command if
-/// set, otherwise auto-detects Cursor/VS Code (whose CLIs don't grab the
-/// terminal), then falls back to the OS default handler.
+/// Open a file in the user's editor. Auto-detects Cursor/VS Code when no
+/// working custom command is configured, then falls back to the OS default.
 fn open_in_editor(editor: Option<&str>, path: &Path) {
+    use std::process::Stdio;
+
     if let Some(tmpl) = editor.filter(|s| !s.trim().is_empty()) {
         let cmd = if tmpl.contains("{file}") {
             tmpl.replace("{file}", &path.to_string_lossy())
         } else {
             format!("{tmpl} {}", path.to_string_lossy())
         };
-        if std::process::Command::new("sh")
-            .arg("-c")
-            .arg(&cmd)
-            .spawn()
-            .is_ok()
-        {
-            return;
+        if let Some(program) = cmd.split_whitespace().next() {
+            if command_exists(program)
+                && std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(&cmd)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .is_ok()
+            {
+                return;
+            }
         }
     }
 
     for editor_cmd in ["cursor", "code"] {
-        if std::process::Command::new(editor_cmd)
-            .arg(path)
-            .spawn()
-            .is_ok()
+        if command_exists(editor_cmd)
+            && std::process::Command::new(editor_cmd)
+                .arg(path)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .is_ok()
         {
             return;
         }
     }
     let _ = std::process::Command::new("open").arg(path).spawn();
+}
+
+fn command_exists(name: &str) -> bool {
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(format!("command -v {name} >/dev/null 2>&1"))
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 /// Copy text to the macOS clipboard via `pbcopy`.
@@ -667,7 +690,7 @@ fn handle_problems_input(app: &mut App, key: KeyCode) {
         KeyCode::Char('g') => app.page_up(),
         KeyCode::Char('d') => app.page_down(),
         KeyCode::Char('u') => app.page_up(),
-        KeyCode::Enter | KeyCode::Char('o') => start_selected_problem(app),
+        KeyCode::Char('o') => start_selected_problem(app),
         KeyCode::Char('U') => {
             app.url_input_active = true;
             app.url_input_buf.clear();

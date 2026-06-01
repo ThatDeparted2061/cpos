@@ -3,7 +3,6 @@ use ratatui::widgets::*;
 
 use crate::app::App;
 use crate::ui::progress;
-use crate::ui::theme::Theme;
 
 const C: [&str; 5] = [" ████ ", "█     ", "█     ", "█     ", " ████ "];
 const P: [&str; 5] = ["█████ ", "█    █", "█████ ", "█     ", "█     "];
@@ -136,7 +135,7 @@ fn draw_stat_cards(frame: &mut Frame, app: &App, area: Rect) {
         .current_rating()
         .map(|r| r.to_string())
         .unwrap_or_else(|| "—".to_string());
-    let rating_color = Theme::rating_color(app.current_rating());
+    let rating_color = app.theme.rating_color(app.current_rating());
 
     stat_card(frame, app, cols[0], "PROBLEMS", &app.problems.len().to_string(), app.theme.accent);
     stat_card(
@@ -302,7 +301,7 @@ fn draw_up_next(frame: &mut Frame, app: &App, area: Rect) {
                 ))),
                 Cell::from(truncate(&p.name, 22)),
                 Cell::from(p.difficulty_label())
-                    .style(Style::default().fg(Theme::rating_color(p.rating))),
+                    .style(Style::default().fg(app.theme.rating_color(p.rating))),
             ])
         })
         .collect();

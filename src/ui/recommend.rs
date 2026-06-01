@@ -2,7 +2,6 @@ use ratatui::prelude::*;
 use ratatui::widgets::*;
 
 use crate::app::App;
-use crate::ui::theme::Theme;
 
 pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
@@ -106,7 +105,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 ])),
                 Cell::from(p.name.clone()),
                 Cell::from(p.difficulty_label())
-                    .style(Style::default().fg(Theme::rating_color(p.rating))),
+                    .style(Style::default().fg(app.theme.rating_color(p.rating))),
                 Cell::from(topics).style(Style::default().fg(t.dim)),
             ])
             .style(row_style)

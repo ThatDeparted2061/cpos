@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 
 use crate::data::cache::Cache;
@@ -452,6 +452,8 @@ impl App {
             .cloned()
             .collect();
 
+        self.filtered_problems.sort_by(workspace::compare_problems);
+
         if self.problem_selected >= self.filtered_problems.len() {
             self.problem_selected = self.filtered_problems.len().saturating_sub(1);
         }
@@ -533,6 +535,28 @@ impl App {
         let contests = cache.get_contests(Platform::Codeforces)?;
         self.set_contests(contests);
         Ok(())
+    }
+
+    /// Restore the last problem captured in the browser / VS Code extension.
+    pub fn restore_session(&mut self) {
+        let Some((problem, solution_path, _)) = workspace::load_latest_session() else {
+            return;
+        };
+
+        if let Some(path) = solution_path {
+            self.set_solution_path(&problem, path);
+        }
+
+        self.focus_problem(&problem);
+        self.active_tab = Tab::Problems;
+        self.status_message = format!(
+            "Restored {} ({}) — press o to open, T to test",
+            problem.id, problem.name
+        );
+    }
+
+    pub fn persist_session(&self, problem: &Problem, solution_path: Option<&Path>) {
+        let _ = workspace::save_session(problem, solution_path);
     }
 
     /// Friendly status line after loading cached data (before any background sync).
@@ -712,6 +736,7 @@ impl App {
                     n,
                     if n == 1 { "" } else { "s" },
                 );
+                self.persist_session(&problem, Some(&path));
                 return Some(StartedProblem {
                     url: problem.url.clone(),
                     problem,
@@ -850,6 +875,35 @@ impl App {
     fn start_problem_inner(&mut self, problem: Problem) -> Option<StartedProblem> {
         let ext = self.solution_ext();
         let template = workspace::template_content(&self.config, &self.config.default_language);
+
+        if let Some(external) = self.solution_paths.get(&Self::problem_key(&problem)).cloned() {
+            let already_existed = external.exists();
+            if !external.exists() {
+                if let Some(parent) = external.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if std::fs::write(&external, &template).is_err() {
+                    self.status_message =
+                        format!("Could not create solution file at {}", external.display());
+                    return None;
+                }
+            }
+            self.persist_session(&problem, Some(&external));
+            let url = problem.url.clone();
+            self.status_message = format!(
+                "{} {} — {}",
+                if already_existed { "Reopened" } else { "Started" },
+                problem.id,
+                external.display()
+            );
+            return Some(StartedProblem {
+                problem,
+                solution_path: external,
+                url,
+                already_existed,
+            });
+        }
+
         let already_existed = workspace::solution_path(&self.config, &problem, &ext).exists();
         let solution_path = match workspace::scaffold(&self.config, &problem, &ext, &template) {
             Ok(p) => p,
@@ -859,6 +913,7 @@ impl App {
             }
         };
 
+        self.persist_session(&problem, Some(&solution_path));
         let url = problem.url.clone();
         self.status_message = format!(
             "{} {} — {}",
@@ -1000,7 +1055,6 @@ impl App {
                 "Template File",
                 self.config.template_file.clone().unwrap_or_default(),
             ),
-            ("Editor", self.config.editor.clone().unwrap_or_default()),
             (
                 "CSES Session",
                 if self.config.cses_session.is_some() {
@@ -1072,14 +1126,6 @@ impl App {
             }
             5 => {
                 let v = self.config_edit_buf.trim();
-                self.config.editor = if v.is_empty() {
-                    None
-                } else {
-                    Some(v.to_string())
-                };
-            }
-            6 => {
-                let v = self.config_edit_buf.trim();
                 self.config.cses_session = if v.is_empty() {
                     None
                 } else {
@@ -1089,7 +1135,7 @@ impl App {
             _ => {}
         }
         self.config_editing = false;
-        let saved_cses = self.config_selected == 6;
+        let saved_cses = self.config_selected == 5;
         let _ = self.config.save();
         self.status_message = if saved_cses && self.config.cses_session.is_some() {
             "CSES cookie saved — press r to sync, or visit cses.fi/problemset/list/ logged in".to_string()

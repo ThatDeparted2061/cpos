@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::data::config::Config;
-use crate::data::models::{Platform, Problem, TestCase};
+use crate::data::models::{Platform, Problem, SolveStatus, TestCase};
 
 /// Expand a leading `~/` to the user's home directory.
 pub fn expand_tilde(s: &str) -> PathBuf {
@@ -147,6 +147,140 @@ pub fn load_tests(config: &Config, problem: &Problem) -> Vec<TestCase> {
         .unwrap_or_default()
 }
 
+/// Sort key for the Problems list — newer Codeforces contests first, then A→Z
+/// within a contest (matches the problemset ordering users expect).
+pub fn compare_problems(a: &Problem, b: &Problem) -> std::cmp::Ordering {
+    problem_sort_key(a).cmp(&problem_sort_key(b))
+}
+
+fn problem_sort_key(p: &Problem) -> (i64, i64, String) {
+    match p.platform {
+        Platform::Codeforces => {
+            let (contest, idx) = split_cf_id(&p.id);
+            (-(contest as i64), cf_index_order(&idx), p.id.clone())
+        }
+        Platform::Cses => {
+            let n = p.id.parse::<i64>().unwrap_or(0);
+            (-n, 0, p.id.clone())
+        }
+        Platform::AtCoder => (0, 0, p.id.clone()),
+    }
+}
+
+fn split_cf_id(id: &str) -> (u32, String) {
+    let split = id
+        .char_indices()
+        .find(|(_, c)| !c.is_ascii_digit())
+        .map(|(i, _)| i)
+        .unwrap_or(id.len());
+    if split == 0 {
+        return (0, id.to_string());
+    }
+    let contest = id[..split].parse().unwrap_or(0);
+    (contest, id[split..].to_string())
+}
+
+fn cf_index_order(idx: &str) -> i64 {
+    // A before B before C; handles A1, B2, etc. lexicographically.
+    idx.chars().next().map(|c| c as i64).unwrap_or(999)
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StoredSession {
+    platform: String,
+    id: String,
+    name: String,
+    url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "solutionPath")]
+    solution_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "capturedAt")]
+    captured_at: Option<String>,
+}
+
+impl StoredSession {
+    fn from_problem(problem: &Problem, solution_path: Option<&std::path::Path>) -> Self {
+        StoredSession {
+            platform: platform_slug(problem.platform).to_string(),
+            id: problem.id.clone(),
+            name: problem.name.clone(),
+            url: problem.url.clone(),
+            solution_path: solution_path.map(|p| p.to_string_lossy().into_owned()),
+            captured_at: Some(chrono::Utc::now().to_rfc3339()),
+        }
+    }
+
+    fn into_problem(&self) -> Problem {
+        let platform = match self.platform.to_lowercase().as_str() {
+            "codeforces" | "cf" => Platform::Codeforces,
+            "cses" => Platform::Cses,
+            "atcoder" => Platform::AtCoder,
+            _ => Platform::Codeforces,
+        };
+        Problem {
+            platform,
+            id: self.id.clone(),
+            name: self.name.clone(),
+            url: self.url.clone(),
+            rating: None,
+            tags: vec![],
+            category: None,
+            solved_count: None,
+            status: SolveStatus::Unsolved,
+        }
+    }
+
+    fn timestamp_key(&self) -> String {
+        self.captured_at.clone().unwrap_or_default()
+    }
+}
+
+fn session_path() -> PathBuf {
+    Config::data_dir().join("last-session.json")
+}
+
+pub fn vscode_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".cpos-vscode")
+}
+
+/// Persist the active problem so the next TUI launch can restore it.
+pub fn save_session(problem: &Problem, solution_path: Option<&std::path::Path>) -> Result<()> {
+    let _ = std::fs::create_dir_all(Config::data_dir());
+    let session = StoredSession::from_problem(problem, solution_path);
+    let json = serde_json::to_string_pretty(&session)?;
+    std::fs::write(session_path(), json)?;
+    Ok(())
+}
+
+fn read_session_file(path: &std::path::Path) -> Option<StoredSession> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+}
+
+/// Most recently captured/opened problem from the TUI or VS Code extension.
+pub fn load_latest_session() -> Option<(Problem, Option<PathBuf>, String)> {
+    let mut candidates: Vec<(Problem, Option<PathBuf>, String)> = Vec::new();
+
+    if let Some(s) = read_session_file(&session_path()) {
+        candidates.push(session_tuple(s));
+    }
+
+    let vscode_last = vscode_dir().join("last-problem.json");
+    if let Some(s) = read_session_file(&vscode_last) {
+        candidates.push(session_tuple(s));
+    }
+
+    candidates.into_iter().max_by_key(|(_, _, ts)| ts.clone())
+}
+
+fn session_tuple(s: StoredSession) -> (Problem, Option<PathBuf>, String) {
+    let ts = s.timestamp_key();
+    let path = s.solution_path.as_deref().map(PathBuf::from);
+    (s.into_problem(), path, ts)
+}
+
 /// Resolve the template to scaffold with: the user's configured template file
 /// if set and readable, otherwise the built-in per-language template.
 pub fn template_content(config: &Config, lang: &str) -> String {
@@ -241,5 +375,44 @@ mod tests {
         };
         let path = solution_path(&Config::default(), &p, "cpp");
         assert!(path.to_string_lossy().ends_with("codeforces/2232F.cpp"));
+    }
+
+    #[test]
+    fn codeforces_sort_newer_contests_first() {
+        let older = Problem {
+            platform: Platform::Codeforces,
+            id: "1000A".to_string(),
+            name: "old".to_string(),
+            url: String::new(),
+            rating: Some(800),
+            tags: vec![],
+            category: None,
+            solved_count: None,
+            status: SolveStatus::Unsolved,
+        };
+        let newer = Problem {
+            platform: Platform::Codeforces,
+            id: "2232A".to_string(),
+            name: "new".to_string(),
+            url: String::new(),
+            rating: Some(800),
+            tags: vec![],
+            category: None,
+            solved_count: None,
+            status: SolveStatus::Unsolved,
+        };
+        assert_eq!(compare_problems(&older, &newer), std::cmp::Ordering::Greater);
+        assert_eq!(compare_problems(&newer, &older), std::cmp::Ordering::Less);
+    }
+
+    #[test]
+    fn session_roundtrip() {
+        let p = cses_problem("1068", "Weird Algorithm");
+        let path = PathBuf::from("/tmp/WeirdAlgorithm.cpp");
+        save_session(&p, Some(&path)).unwrap();
+        let (restored, restored_path, _) = load_latest_session().unwrap();
+        assert_eq!(restored.id, "1068");
+        assert_eq!(restored_path, Some(path));
+        let _ = std::fs::remove_file(session_path());
     }
 }

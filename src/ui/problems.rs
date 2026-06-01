@@ -143,7 +143,7 @@ fn draw_problem_table(frame: &mut Frame, app: &App, area: Rect) {
                 ])),
                 Cell::from(p.name.clone()),
                 Cell::from(p.difficulty_label())
-                    .style(Style::default().fg(Theme::rating_color(p.rating))),
+                    .style(Style::default().fg(app.theme.rating_color(p.rating))),
                 Cell::from(format!("{}", p.platform)).style(Style::default().fg(t.accent_dim)),
             ])
             .style(row_style)
@@ -188,7 +188,7 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 format!(" {} ", p.display_id()),
                 Style::default()
-                    .fg(Theme::rating_color(p.rating))
+                    .fg(app.theme.rating_color(p.rating))
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(p.name.clone(), Style::default().fg(t.fg).add_modifier(Modifier::BOLD)),
@@ -197,7 +197,7 @@ fn draw_detail(frame: &mut Frame, app: &App, area: Rect) {
             Span::styled(" rating  ", Style::default().fg(t.dim)),
             Span::styled(
                 p.difficulty_label(),
-                Style::default().fg(Theme::rating_color(p.rating)),
+                Style::default().fg(app.theme.rating_color(p.rating)),
             ),
             Span::styled("    status  ", Style::default().fg(t.dim)),
             Span::styled(format!("{}", p.status), Style::default().fg(t.fg)),
