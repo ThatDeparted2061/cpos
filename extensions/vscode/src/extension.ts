@@ -1460,7 +1460,74 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   .verdict.TLE, .verdict.RE { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
   .verdict.run { color: var(--accent); border-color: var(--accent-dim); }
   .test-body { padding: 8px; display: flex; flex-direction: column; gap: 7px; }
-  .io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .io-grid {
+    display: grid;
+    grid-template-columns: var(--io-in-pct, 68%) 6px minmax(0, 1fr);
+    gap: 0;
+    align-items: stretch;
+  }
+  .io-col { min-width: 0; display: flex; flex-direction: column; }
+  .io-splitter {
+    cursor: col-resize;
+    background: var(--border-soft);
+    border-radius: 2px;
+    margin: 18px 0 0;
+    align-self: stretch;
+    touch-action: none;
+  }
+  .io-splitter:hover, .io-splitter.dragging { background: var(--accent-dim); }
+  .io-input-box {
+    position: relative;
+    border-radius: 4px;
+    border: 1px solid var(--border-soft);
+    background: var(--input-bg);
+    overflow: hidden;
+  }
+  .io-input-box:focus-within { border-color: var(--accent-dim); }
+  .io-line-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    padding: 6px 7px;
+    overflow: hidden;
+  }
+  .io-line-bg .ln {
+    min-height: calc(11px * 1.4);
+    line-height: 1.4;
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 0 2px;
+    border-radius: 2px;
+    white-space: pre;
+    overflow: hidden;
+  }
+  .io-line-bg .ln.odd { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+  .io-line-bg .ln.even { background: transparent; }
+  .io-input-box:hover .io-line-bg .ln,
+  .io-input-box:focus-within .io-line-bg .ln {
+    background: color-mix(in srgb, var(--warn) 22%, var(--input-bg));
+  }
+  .io-input-box textarea.in {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    min-height: 3.2em;
+    resize: vertical;
+    border: none;
+    background: transparent;
+    color: var(--fg);
+    padding: 6px 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.4;
+    overflow-y: auto;
+  }
+  .io-input-box textarea.in:focus { outline: none; }
+  .io-col .exp {
+    min-height: 2.4em;
+  }
   label {
     font-size: 8px;
     letter-spacing: 0.1em;
@@ -1515,7 +1582,62 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   const saved = vscode.getState() || {};
   let theme = saved.theme || 'cpos';
   let themesOpen = false;
+  let ioSplit = typeof saved.ioSplit === 'number' ? saved.ioSplit : 68;
   document.body.setAttribute('data-theme', theme);
+
+  function persistUiState() {
+    vscode.setState(Object.assign({}, vscode.getState(), { theme, ioSplit }));
+  }
+
+  function applyIoSplit(pct) {
+    ioSplit = Math.min(82, Math.max(48, pct));
+    document.querySelectorAll(".io-grid").forEach((grid) => {
+      grid.style.setProperty("--io-in-pct", ioSplit + "%");
+    });
+    persistUiState();
+  }
+
+  function inputLineHtml(text) {
+    const raw = String(text == null ? "" : text);
+    const lines = raw.split("\\n");
+    if (!lines.length) lines.push("");
+    return lines.map(function (line, i) {
+      const shown = line.length ? esc(line) : "&nbsp;";
+      return '<div class="ln ' + (i % 2 ? "even" : "odd") + '"><span class="ln-txt">' + shown + '</span></div>';
+    }).join("");
+  }
+
+  function syncInputLines(ta) {
+    const box = ta.closest(".io-input-box");
+    const bg = box && box.querySelector(".io-line-bg");
+    if (bg) bg.innerHTML = inputLineHtml(ta.value);
+    autoResizeTextareas(box || ta.closest(".test") || document);
+  }
+
+  function bindIoSplitters(root) {
+    (root || document).querySelectorAll("[data-splitter]").forEach(function (handle) {
+      if (handle._cposSplitBound) return;
+      handle._cposSplitBound = true;
+      handle.addEventListener("mousedown", function (ev) {
+        const grid = handle.closest(".io-grid");
+        if (!grid) return;
+        ev.preventDefault();
+        handle.classList.add("dragging");
+        const rect = grid.getBoundingClientRect();
+        function onMove(e) {
+          const pct = ((e.clientX - rect.left) / rect.width) * 100;
+          applyIoSplit(pct);
+        }
+        function onUp() {
+          handle.classList.remove("dragging");
+          window.removeEventListener("mousemove", onMove);
+          window.removeEventListener("mouseup", onUp);
+        }
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+      });
+    });
+  }
 
   function send(type, extra) { vscode.postMessage(Object.assign({ type }, extra || {})); }
 
@@ -1630,7 +1752,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   function applyTheme(id) {
     theme = id;
     document.body.setAttribute('data-theme', id);
-    vscode.setState(Object.assign({}, vscode.getState(), { theme: id }));
+    persistUiState();
   }
 
   function statbar() {
@@ -1663,7 +1785,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     else if (r) { verdict = r.verdict; vClass = verdictClass(r.verdict); cardClass = r.passed ? "pass" : "fail"; }
     const got = '<div class="result-slot">' + resultHtml(r) + '</div>';
     const inRows = textareaRows(t.input, 3, 14);
-    const expRows = textareaRows(t.expected_output, 2, 10);
+    const expRows = textareaRows(t.expected_output, 2, 6);
     return '<div class="box test ' + cardClass + '" data-index="' + i + '">'
       + '<div class="test-head">'
       + '<div class="test-title"><span class="idx">Test ' + (i + 1) + '</span><span class="verdict ' + vClass + '">' + verdict + '</span></div>'
@@ -1673,9 +1795,13 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       + '</div>'
       + '</div>'
       + '<div class="test-body">'
-      + '<div class="io-grid">'
-      + '<div><label>Input</label><textarea class="in" rows="' + inRows + '" spellcheck="false">' + esc(t.input) + '</textarea></div>'
-      + '<div><label>Expected</label><textarea class="exp" rows="' + expRows + '" spellcheck="false">' + esc(t.expected_output) + '</textarea></div>'
+      + '<div class="io-grid" style="--io-in-pct:' + ioSplit + '%">'
+      + '<div class="io-col io-col-input"><label>Input</label>'
+      + '<div class="io-input-box"><div class="io-line-bg">' + inputLineHtml(t.input) + '</div>'
+      + '<textarea class="in" rows="' + inRows + '" spellcheck="false">' + esc(t.input) + '</textarea></div></div>'
+      + '<div class="io-splitter" data-splitter title="Drag to resize"></div>'
+      + '<div class="io-col io-col-exp"><label>Expected</label>'
+      + '<textarea class="exp" rows="' + expRows + '" spellcheck="false">' + esc(t.expected_output) + '</textarea></div>'
       + '</div>'
       + got
       + '</div>'
@@ -1698,6 +1824,8 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     app.innerHTML = header() + statbar() + actions() + testsSection();
     renderedSource = state.source;
     bind();
+    applyIoSplit(ioSplit);
+    bindIoSplitters(app);
     autoResizeTextareas(app);
   }
 
@@ -1731,6 +1859,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       if (slot) slot.innerHTML = resultHtml(r);
     });
     bind();
+    bindIoSplitters(app);
   }
 
   function bind() {
@@ -1771,8 +1900,17 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
         send(act);
       };
     });
-    document.querySelectorAll("textarea").forEach((ta) => {
-      ta.oninput = () => { schedulePersist(); autoResizeTextareas(ta.closest(".test") || document); };
+    document.querySelectorAll("textarea.in").forEach((ta) => {
+      ta.oninput = () => {
+        syncInputLines(ta);
+        schedulePersist();
+      };
+    });
+    document.querySelectorAll("textarea.exp").forEach((ta) => {
+      ta.oninput = () => {
+        schedulePersist();
+        autoResizeTextareas(ta.closest(".test") || document);
+      };
     });
     autoResizeTextareas(document);
   }
