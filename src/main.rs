@@ -21,9 +21,19 @@ use cpos::ui;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Subcommand: `cpos setup-browser` generates the browser helper and exits.
-    if std::env::args().nth(1).as_deref() == Some("setup-browser") {
-        return setup_browser_command();
+    match std::env::args().nth(1).as_deref() {
+        Some("setup-browser") => return setup_browser_command(),
+        Some("update") => return cpos::engine::update::run(),
+        Some("help" | "--help" | "-h") => {
+            print_help();
+            return Ok(());
+        }
+        Some(cmd) => {
+            eprintln!("Unknown command: {cmd}");
+            eprintln!("Run `cpos help` for usage.");
+            std::process::exit(1);
+        }
+        None => {}
     }
 
     let config = Config::load()?;
@@ -752,6 +762,21 @@ fn handle_url_input(app: &mut App, key: KeyCode) {
         KeyCode::Char(c) => app.url_input_buf.push(c),
         _ => {}
     }
+}
+
+fn print_help() {
+    eprintln!(
+        "CPOS v{version}
+
+Usage:
+  cpos                 Open the terminal app
+  cpos update          Update the terminal app
+  cpos setup-browser   Generate a local browser helper extension
+  cpos help            Show this help
+
+VS Code extension and browser companion update via their stores.",
+        version = env!("CARGO_PKG_VERSION")
+    );
 }
 
 /// Generate browser setup helpers and point users at the checked-in/publishable

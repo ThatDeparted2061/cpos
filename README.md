@@ -110,55 +110,17 @@ Minimum setup: **browser companion + one of VS Code or terminal**. All three tog
 
 ## Updating
 
-CPOS does **not** auto-update if you installed from git or a clone. Pull the latest code, then rebuild or reinstall the parts you use.
-
-### Terminal app
-
-**Installed with `cargo install --git` (no local clone):**
+The terminal app does **not** auto-update. Run:
 
 ```bash
-cargo install --git https://github.com/Soham109/cpos --force
+cpos update
 ```
 
-**From a cloned repo:**
+That pulls the latest version and reinstalls — whether you originally used `cargo install --git` or installed from a local clone. Your config and problem data are kept.
 
-```bash
-cd cpos
-git pull
-cargo install --path . --force
-```
+**VS Code extension** — updates automatically from the Marketplace if **Extensions: Auto Update** is on. Otherwise open **Extensions → CPOS → Update**.
 
-If you run from the build output instead of installing to `~/.cargo/bin`:
-
-```bash
-cd cpos
-git pull
-cargo build --release
-./target/release/cpos
-```
-
-### VS Code extension
-
-**From the Marketplace** — VS Code updates extensions automatically when **Extensions: Auto Update** is on (default). You can also open **Extensions**, find CPOS, and click **Update**.
-
-**From a clone or `.vsix` install** — pull the repo, rebuild, and reinstall:
-
-```bash
-cd cpos
-git pull
-cd extensions/vscode
-npm install
-npm run compile
-npx @vscode/vsce package
-```
-
-In VS Code: **Extensions → ⋯ → Install from VSIX…** and pick the new `cpos-vscode-*.vsix`. Reload the window after install.
-
-### Browser companion
-
-**From the Chrome Web Store** — updates automatically like other extensions.
-
-**Unpacked / developer load** — after `git pull`, open `chrome://extensions`, find CPOS Companion, and click **Reload**.
+**Browser companion** — updates automatically from the Chrome Web Store. If you loaded it unpacked, open `chrome://extensions` and click **Reload** after pulling the repo.
 
 <p align="center">
   <img src="docs/problems.png" alt="Problems" width="410">
