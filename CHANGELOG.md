@@ -5,8 +5,8 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.0 | `Cargo.toml` |
-| VS Code extension | 0.3.13 | `extensions/vscode/package.json` |
-| Browser companion | 0.6.6 | `extensions/chrome/manifest.json` |
+| VS Code extension | 0.3.16 | `extensions/vscode/package.json` |
+| Browser companion | 0.6.11 | `extensions/chrome/manifest.json` |
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -14,6 +14,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Terminal app
 - Opening a problem with **`o`** or Enter now prefers your **active project directory** when VS Code has synced a solution path, a recent session points outside the default `~/cpos` tree, or the shell working directory looks like a project.
+- **Submit** now relies entirely on the browser companion in Chrome instead of opening the system default browser, so submissions always land in the logged-in Chrome session (matching the VS Code flow).
 
 ### Added
 - Community documentation: `CONTRIBUTING.md`, `SECURITY.md`, `ARCHITECTURE.md`
@@ -25,6 +26,22 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Landing page redesign with optimized WebP screenshots
 
 ---
+
+## Browser companion — 0.6.11
+
+### Changed
+- **Much faster submit:** the service worker is kept warm (keepalive + alarm revive) so a queued submission is picked up almost immediately instead of waiting for the worker to wake
+- The open problem page now nudges the worker the moment a submission is queued, so submit stays responsive even after an idle period
+- Submit tab opens as soon as the URL commits (no longer waits for the full page load); poll interval tightened to 150 ms
+
+## Browser companion — 0.6.7 – 0.6.10
+
+### Fixed
+- Codeforces submit reliability: source textarea set first with Ace kept in sync, correct problem field (`submittedProblemIndex` vs `submittedProblemCode`), and robust submit-button selection
+- Brings the Chrome submit tab to the foreground after filling, without blocking the submit flow
+
+### Added
+- Codeforces **output block metadata** (`output_block_sizes`) alongside input blocks for accurate input/output highlighting, with a fallback parser for `YES`/`NO`-style outputs
 
 ## Browser companion — 0.6.6
 
@@ -58,6 +75,19 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Initial Chrome Web Store release
 
 ---
+
+## VS Code extension — 0.3.16
+
+### Added
+- Panel theme is now saved in extension storage, so your choice persists across reloads, restarts, and reinstalls
+
+### Fixed
+- Input/output block highlighting now links whole blocks (including multi-line `YES`/`NO` outputs) using captured output block sizes, with a fallback parser when metadata is absent
+
+## VS Code extension — 0.3.14 – 0.3.15
+
+### Changed
+- Submit no longer opens the system default browser; the browser companion opens and fills the submit page in Chrome
 
 ## VS Code extension — 0.3.13
 
