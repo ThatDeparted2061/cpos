@@ -218,6 +218,44 @@ codeforces = "your_handle"
 
 ---
 
+## Troubleshooting
+
+### `CPOS run failed: spawn sh ENOENT`
+
+This means CPOS **could not start a shell** to compile or run your file — it is **not** a wrong answer or compilation error in your code. Update to **VS Code extension 0.3.21+**, which uses the correct shell on each OS.
+
+**macOS**
+
+1. Install a compiler if needed: `brew install gcc` (C/C++).
+2. If VS Code or Cursor was opened from the Dock, try launching from Terminal so PATH includes `/bin` and Homebrew:
+   ```bash
+   cursor .
+   # or: code .
+   ```
+3. Open **Output → CPOS** to see the exact command CPOS tried to run.
+
+**Windows**
+
+1. Install a C++ toolchain — e.g. [MSYS2](https://www.msys2.org/) then:
+   ```bash
+   pacman -S mingw-w64-ucrt-x86_64-gcc
+   ```
+   Add `C:\msys64\ucrt64\bin` to your system PATH (or use MinGW-w64 / Scoop `gcc`).
+2. Python: ensure `python` is on PATH (Windows often has no `python3` command).
+3. Check **Output → CPOS** for the compile/run command and any compiler errors.
+
+**All platforms**
+
+- **Compilation failed (CE)** in the panel is different — your toolchain ran but the build failed; read stderr in the test row or CPOS output.
+- Override commands under `Settings → Extensions → CPOS → Compile Commands` if you use a custom compiler path.
+
+### Submit does nothing
+
+- Install the [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) and stay logged in to Codeforces/CSES in **Chrome**.
+- CPOS only talks to Chrome on `127.0.0.1` — not Safari or Firefox.
+
+---
+
 ## Roadmap
 
 - AtCoder & CodeChef support

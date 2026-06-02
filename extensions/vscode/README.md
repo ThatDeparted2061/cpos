@@ -52,6 +52,21 @@ By default, files are created in the **currently open workspace folder**.
 
 Submit requires the [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) and an active login on the judge site.
 
+## Troubleshooting
+
+### `CPOS run failed: spawn sh ENOENT`
+
+CPOS could not start a shell to compile/run — **not** a WA/CE on your solution. Use extension **0.3.21+**.
+
+| OS | Fix |
+| --- | --- |
+| **macOS** | `brew install gcc`; launch Cursor/VS Code from Terminal (`cursor .`) if opened from the Dock |
+| **Windows** | Install [MSYS2](https://www.msys2.org/) + `mingw-w64-ucrt-x86_64-gcc`; add `ucrt64\bin` to PATH; use `python` not `python3` |
+
+Check **Output → CPOS** for the command that ran. Customize compilers via `cpos.compileCommands` in settings.
+
+See the [main README troubleshooting section](https://github.com/Soham109/cpos#troubleshooting) for full details.
+
 ## Links
 
 - [Full demo on YouTube](https://youtu.be/5HTatBfpK5A)

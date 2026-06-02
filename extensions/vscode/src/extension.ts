@@ -385,12 +385,12 @@ function validateProblem(problem: CapturedProblem): void {
 function getCompileConfig(lang: string): CompileConfig {
   // 1. An explicit VS Code override always wins, verbatim.
   const overrides = userSetting<Record<string, CompileConfig>>("compileCommands");
-  if (overrides && overrides[lang]) return overrides[lang];
+  if (overrides && overrides[lang]) return applyPlatformRun(overrides[lang]);
 
   // 2. Otherwise inherit from the CPOS TUI config so both stay in sync.
   const tui = tuiConfig().compileCommands[lang];
   if (tui && tui.run && tui.extension) {
-    return absolutizeConfig({ compile: tui.compile, run: tui.run, extension: tui.extension });
+    return applyPlatformRun(absolutizeConfig({ compile: tui.compile, run: tui.run, extension: tui.extension }));
   }
 
   // 3. Fall back to the built-in defaults.
@@ -401,12 +401,24 @@ function getCompileConfig(lang: string): CompileConfig {
   // Use a real GNU toolchain (e.g. Homebrew g++-15) by absolute path when
   // available, so it works even when the GUI app's PATH misses /opt/homebrew/bin.
   if (lang === "cpp") {
-    return { ...value, compile: `${cppCompiler()} -std=c++17 -O2 -o {output} {source}` };
+    return applyPlatformRun({
+      ...value,
+      compile: `${cppCompiler()} -std=c++17 -O2 -o {output} {source}`
+    });
   }
   if (lang === "c") {
-    return { ...value, compile: `${cCompiler()} -std=c11 -O2 -o {output} {source} -lm` };
+    return applyPlatformRun({
+      ...value,
+      compile: `${cCompiler()} -std=c11 -O2 -o {output} {source} -lm`
+    });
   }
-  return value;
+  if (lang === "python") {
+    return applyPlatformRun({ ...value, run: `${pythonRunner()} {source}` });
+  }
+  if (lang === "pypy") {
+    return applyPlatformRun({ ...value, run: `${pypyRunner()} {source}` });
+  }
+  return applyPlatformRun(value);
 }
 
 // Returns a VS Code setting only when the user explicitly set it (so we can
@@ -530,13 +542,17 @@ function resolveBinary(candidates: string[], fallback: string): string {
   if (cached) return cached;
 
   const pathDirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
-  const extraDirs = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin", "/usr/bin"];
+  const extraDirs = toolPathDirs();
   for (const candidate of candidates) {
-    for (const dir of [...pathDirs, ...extraDirs]) {
-      const full = path.join(dir, candidate);
-      if (existsSync(full)) {
-        compilerCache.set(key, full);
-        return full;
+    const names =
+      process.platform === "win32" ? [candidate, `${candidate}.exe`] : [candidate];
+    for (const name of names) {
+      for (const dir of [...pathDirs, ...extraDirs]) {
+        const full = path.join(dir, name);
+        if (existsSync(full)) {
+          compilerCache.set(key, full);
+          return full;
+        }
       }
     }
   }
@@ -550,6 +566,65 @@ function cppCompiler(): string {
 
 function cCompiler(): string {
   return resolveBinary(["gcc-15", "gcc-14", "gcc-13", "gcc-12", "gcc-11"], "gcc");
+}
+
+/** Extra dirs merged into PATH for spawned runs (GUI apps often have a thin PATH). */
+function toolPathDirs(): string[] {
+  if (process.platform === "win32") {
+    const pf = process.env.ProgramFiles ?? "C:\\Program Files";
+    const pf86 = process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+    return [
+      "C:\\msys64\\ucrt64\\bin",
+      "C:\\msys64\\mingw64\\bin",
+      "C:\\msys64\\usr\\bin",
+      "C:\\MinGW\\bin",
+      path.join(pf, "mingw-w64", "bin"),
+      path.join(pf86, "mingw-w64", "bin"),
+      path.join(os.homedir(), "scoop", "shims"),
+      "C:\\Windows\\System32"
+    ];
+  }
+  return ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin", "/usr/bin", "/bin"];
+}
+
+function processEnvForRun(): NodeJS.ProcessEnv {
+  const pathDirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  const merged = [...new Set([...pathDirs, ...toolPathDirs()])].join(path.delimiter);
+  return { ...process.env, PATH: merged };
+}
+
+function shellForRun(): { file: string; args: (command: string) => string[] } {
+  if (process.platform === "win32") {
+    const file = process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe";
+    return { file, args: (command) => ["/d", "/s", "/c", command] };
+  }
+  for (const file of ["/bin/sh", "/usr/bin/sh"]) {
+    if (existsSync(file)) return { file, args: (command) => ["-c", command] };
+  }
+  return { file: "sh", args: (command) => ["-c", command] };
+}
+
+/** Windows cannot run `./binary`; map Unix-style run templates to `.exe` names. */
+function applyPlatformRun(config: CompileConfig): CompileConfig {
+  if (process.platform !== "win32") return config;
+  let run = config.run;
+  if (run === "./{output}") run = "{output}.exe";
+  else if (run.startsWith("./{output}")) run = run.replace(/^\.\/\{output\}/, "{output}.exe");
+  return { ...config, run };
+}
+
+function pythonRunner(): string {
+  if (process.platform === "win32") {
+    return resolveBinary(["python", "python3", "py"], "python");
+  }
+  return resolveBinary(["python3", "python"], "python3");
+}
+
+function pypyRunner(): string {
+  if (process.platform === "win32") {
+    return resolveBinary(["pypy3", "pypy"], "pypy3");
+  }
+  return resolveBinary(["pypy3", "pypy"], "pypy3");
 }
 
 function solutionPathFor(problem: CapturedProblem, extension: string): string {
@@ -1023,6 +1098,9 @@ function expandCommand(command: string, source: string, outputName: string, buil
 }
 
 function shellQuote(value: string): string {
+  if (process.platform === "win32") {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
@@ -1034,13 +1112,18 @@ function runShell(
 ): Promise<{ code: number; stdout: string; stderr: string; timedOut: boolean; timeMs: number }> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
-    const child = spawn("sh", ["-c", command], { cwd });
+    const shell = shellForRun();
+    const child = spawn(shell.file, shell.args(command), {
+      cwd,
+      env: processEnvForRun(),
+      windowsHide: true
+    });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGKILL");
+      child.kill();
     }, timeoutMs);
 
     child.stdout.on("data", (chunk) => (stdout += chunk.toString()));

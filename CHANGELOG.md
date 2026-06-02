@@ -5,7 +5,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.0 | `Cargo.toml` |
-| VS Code extension | 0.3.20 | `extensions/vscode/package.json` |
+| VS Code extension | 0.3.21 | `extensions/vscode/package.json` |
 | Browser companion | 0.6.12 | `extensions/chrome/manifest.json` |
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
@@ -28,6 +28,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Full demo video embedded on the [website](https://cpos.sohamaggarwal.com) and linked from README files
 
 ---
+
+## VS Code extension — 0.3.21
+
+### Fixed
+- **Run All on macOS and Windows** — cross-platform shell for compile/run (`/bin/sh` or `cmd.exe`), enriched PATH for GUI-launched editors, Windows `.exe` run templates, and `python`/`g++` discovery on Windows
 
 ## VS Code extension — 0.3.20
 
