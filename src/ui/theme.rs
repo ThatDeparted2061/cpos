@@ -27,7 +27,8 @@ impl Default for Theme {
 }
 
 impl Theme {
-    pub const NAMES: [&'static str; 6] = ["purple", "cyan", "green", "amber", "mono", "plain"];
+    pub const NAMES: [&'static str; 7] =
+        ["purple", "cyan", "green", "amber", "mono", "plain", "light"];
 
     pub fn from_name(name: &str) -> Theme {
         let base = Theme {
@@ -86,6 +87,20 @@ impl Theme {
                 success: Color::Rgb(168, 196, 168),
                 warning: Color::Rgb(196, 188, 156),
                 danger: Color::Rgb(196, 160, 160),
+            },
+            // Light canvas — matches VS Code default light sidebar / editor feel.
+            "light" => Theme {
+                id: "light",
+                bg: Color::Rgb(243, 243, 243),
+                fg: Color::Rgb(51, 51, 51),
+                dim: Color::Rgb(110, 110, 110),
+                border: Color::Rgb(204, 204, 204),
+                accent: Color::Rgb(0, 122, 204),
+                accent_dim: Color::Rgb(0, 106, 177),
+                highlight_bg: Color::Rgb(228, 238, 247),
+                success: Color::Rgb(56, 142, 60),
+                warning: Color::Rgb(184, 134, 11),
+                danger: Color::Rgb(229, 20, 0),
             },
             _ => base,
         }

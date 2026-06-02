@@ -2,7 +2,7 @@
   "name": "cpos-vscode",
   "displayName": "CPOS",
   "description": "Capture Codeforces & CSES problems, run sample tests, and submit — all from VS Code.",
-  "version": "0.3.16",
+  "version": "0.3.20",
   "publisher": "sohamaggarwal",
   "license": "MIT",
   "icon": "media/icon128.png",
@@ -180,7 +180,7 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package",
+    "package": "npm run compile && vsce package",
     "publish": "vsce publish"
   },
   "devDependencies": {

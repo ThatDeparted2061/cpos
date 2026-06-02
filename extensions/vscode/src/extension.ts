@@ -1068,6 +1068,29 @@ async function openProblem(): Promise<void> {
   await vscode.env.openExternal(vscode.Uri.parse(meta.url));
 }
 
+async function searchProblem(): Promise<void> {
+  const source = await activeSolutionPath();
+  const meta = source ? await loadProblemMetaForFile(source) : await loadProblemMeta();
+  if (!meta) {
+    vscode.window.showWarningMessage("Link a problem first to search for editorials.");
+    return;
+  }
+  const platformKey = meta.platform.toLowerCase();
+  const platformLabel =
+    platformKey === "codeforces" || platformKey === "cf"
+      ? "Codeforces"
+      : platformKey === "cses"
+        ? "CSES"
+        : meta.platform;
+  const query = `${platformLabel} ${meta.id} ${meta.name} editorial solution`.trim();
+  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  await vscode.env.openExternal(vscode.Uri.parse(url));
+}
+
+async function openGithub(): Promise<void> {
+  await vscode.env.openExternal(vscode.Uri.parse("https://github.com/Soham109/cpos"));
+}
+
 type PanelState = {
   source?: string;
   fileName: string;
@@ -1151,6 +1174,12 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       case "openProblem":
         await openProblem();
         break;
+      case "searchProblem":
+        await searchProblem();
+        break;
+      case "openGithub":
+        await openGithub();
+        break;
       case "retryServer":
         await startCaptureServer().catch((error) => warnServer(error));
         await this.postState();
@@ -1194,6 +1223,9 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 
   private html(): string {
     const nonce = String(Date.now());
+    const logoUri = this.view!.webview
+      .asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "media", "icon128.png"))
+      .toString();
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1290,11 +1322,17 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     --border-soft: var(--vscode-panel-border, #2a2a2a);
     --accent: var(--vscode-textLink-foreground, #4daafc);
     --accent-dim: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground, #3b6ea5));
-    --highlight: var(--vscode-list-hoverBackground, rgba(255,255,255,0.06));
+    --highlight: var(--vscode-list-hoverBackground, rgba(128,128,128,0.12));
     --ok: var(--vscode-testing-iconPassed, var(--vscode-charts-green, #4caf50));
     --bad: var(--vscode-testing-iconFailed, var(--vscode-errorForeground, #f14c4c));
     --warn: var(--vscode-charts-yellow, #e3b341);
     --cf: var(--vscode-charts-blue, #4daafc);
+    --btn-bg: var(--vscode-button-background, #007acc);
+    --btn-fg: var(--vscode-button-foreground, #ffffff);
+    --btn-hover: var(--vscode-button-hoverBackground, #006bb3);
+    --btn-border: var(--vscode-button-border, var(--btn-bg));
+    --btn-secondary-bg: var(--vscode-button-secondaryBackground, var(--highlight));
+    --btn-secondary-fg: var(--vscode-button-secondaryForeground, var(--dim));
   }
 
   * { box-sizing: border-box; }
@@ -1322,28 +1360,55 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   .brandrow { display: flex; align-items: center; gap: 7px; }
   .logo {
     width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
-    background: linear-gradient(135deg, var(--accent), var(--accent-dim));
-    display: inline-block;
+    display: block; object-fit: contain;
   }
   .title { font-weight: 700; font-size: 13px; color: var(--fg); letter-spacing: 0.08em; }
-  .status { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--dim); }
-  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-  .dot.on { background: var(--ok); }
-  .dot.off { background: var(--warn); }
   .rule { height: 1px; background: var(--border-soft); margin: 9px 0; }
 
-  /* theme switcher */
+  /* header icon buttons */
+  .headtools { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
   .iconbtn {
     border: 1px solid var(--border);
     background: transparent;
     color: var(--dim);
     border-radius: 5px;
     padding: 3px 7px;
-    font-size: 11px;
+    font-size: 10px;
     cursor: pointer;
     line-height: 1;
+    font-family: var(--mono);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
-  .iconbtn:hover { color: var(--accent); border-color: var(--accent-dim); }
+  .iconbtn:hover { border-color: var(--accent-dim); }
+  .iconbtn svg { width: 12px; height: 12px; flex-shrink: 0; }
+  .iconbtn.gh {
+    background: #0d1117;
+    border-color: #30363d;
+    color: #f0f6fc;
+  }
+  .iconbtn.gh:hover { background: #161b22; border-color: #484f58; color: #fff; }
+  .iconbtn.search {
+    background: color-mix(in srgb, var(--cf) 16%, transparent);
+    border-color: color-mix(in srgb, var(--cf) 42%, var(--border));
+    color: var(--cf);
+  }
+  .iconbtn.search:hover {
+    background: color-mix(in srgb, var(--cf) 28%, transparent);
+    color: var(--cf);
+  }
+  .iconbtn.theme {
+    background: color-mix(in srgb, var(--accent-dim) 32%, transparent);
+    border-color: var(--accent-dim);
+    color: var(--accent);
+  }
+  .iconbtn.theme:hover {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--accent);
+  }
+  .iconbtn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+  .actions button:disabled { opacity: 0.45; cursor: default; }
   .themebar {
     display: none;
     gap: 7px;
@@ -1414,7 +1479,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     background: transparent;
     color: var(--fg);
   }
-  button:hover { border-color: var(--accent-dim); background: var(--highlight); }
+  button:hover:not(.primary) { border-color: var(--accent-dim); background: var(--highlight); }
   button:active { opacity: 0.85; }
   button.primary {
     grid-column: 1 / -1;
@@ -1429,6 +1494,23 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     cursor: default;
     background: var(--highlight);
     border-color: var(--border);
+  }
+  /* Native theme: VS Code primary button (white label on theme button bg) */
+  body[data-theme="native"] button.primary {
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    border-color: var(--btn-border);
+  }
+  body[data-theme="native"] button.primary:hover {
+    background: var(--btn-hover);
+    border-color: var(--btn-hover);
+    color: var(--btn-fg);
+  }
+  body[data-theme="native"] button.primary:disabled {
+    opacity: 1;
+    background: var(--btn-secondary-bg);
+    color: var(--btn-secondary-fg);
+    border-color: var(--btn-border, var(--border));
   }
   button.ghost {
     padding: 2px 7px;
@@ -1607,6 +1689,8 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 <body>
   <div id="app"></div>
 <script nonce="${nonce}">
+  const CPOS_LOGO = ${JSON.stringify(logoUri)};
+  const GH_ICON = '<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.18.82.63-.18 1.31-.27 1.98-.27.67 0 1.35.09 1.98.27 1.51-1.04 2.18-.82 2.18-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
   const vscode = acquireVsCodeApi();
   let state = { tests: [], results: [], source: null };
   let renderedSource = undefined;
@@ -2018,11 +2102,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 
   function header() {
     const m = state.meta;
-    const status = state.serverRunning
-      ? '<span class="status"><span class="dot on"></span>listening</span>'
-      : state.serverConflict
-        ? '<span class="status"><span class="dot off"></span>active in another window</span>'
-        : '<span class="status"><span class="dot off"></span>offline · <span class="link" data-act="retryServer">retry</span></span>';
+    const searchDisabled = state.meta ? "" : " disabled";
     let problemBlock;
     if (m) {
       const pClass = platformClass(m.platform);
@@ -2040,9 +2120,12 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     const tests = state.tests.length + ' test' + (state.tests.length === 1 ? '' : 's');
     return '<div class="box head header">'
       + '<div class="row">'
-      + '<span class="brandrow"><span class="logo"></span><span class="title">CPOS</span></span>'
-      + '<span class="brandrow">' + status
-      + '<button class="iconbtn" data-act="toggleThemes" title="Themes">◑ theme</button></span>'
+      + '<span class="brandrow"><img class="logo" src="' + CPOS_LOGO + '" alt="CPOS" /><span class="title">CPOS</span></span>'
+      + '<span class="headtools">'
+      + '<button class="iconbtn search" data-act="searchProblem" title="Search editorials on Google"' + searchDisabled + '>Search</button>'
+      + '<button class="iconbtn gh" data-act="openGithub" title="CPOS on GitHub">' + GH_ICON + 'GitHub</button>'
+      + '<button class="iconbtn theme" data-act="toggleThemes" title="Themes">◑ theme</button>'
+      + '</span>'
       + '</div>'
       + '<div class="rule"></div>'
       + problemBlock

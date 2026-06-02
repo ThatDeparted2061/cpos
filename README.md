@@ -51,6 +51,8 @@ Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemNa
 - **Run All** — compile and test every sample
 - **Submit** — autofill the judge submit page in your logged-in browser
 - **Problem** — open the statement again
+- **Search** — Google search for editorials and solutions for the linked problem
+- **GitHub** — open the CPOS repository
 - **Test cases** — edit samples; multi-case inputs show linked input/output blocks when captured from Codeforces
 - **Theme** — five panel themes (see [Settings](#settings))
 
@@ -184,20 +186,20 @@ Press **`r`** after solving more problems to refresh recommendations.
 | `Midnight` | Calm slate-blue |
 | `Amber` | Warm terminal / sepia |
 | `Paper` | High-contrast grayscale, minimal color |
-| `Native` | Inherits your active VS Code color theme — no custom background |
+| `Native` | Inherits your active VS Code color theme — Run All matches VS Code button styling |
 
 **Terminal app** — `~/.config/cpos/config.toml` (Linux) or `~/Library/Application Support/cpos/config.toml` (macOS):
 
 ```toml
 default_language = "cpp"
-theme = "purple"   # purple | cyan | green | amber | mono | plain
+theme = "purple"   # purple | cyan | green | amber | mono | plain | light
 editor = "code {file}"
 
 [handles]
 codeforces = "your_handle"
 ```
 
-> `plain` is a neutral grayscale theme for a low-color terminal interface; `mono` is the single-accent minimal one.
+> `plain` is a neutral grayscale theme for a low-color terminal interface; `mono` is the single-accent minimal one; `light` is a bright canvas for light terminal / VS Code light-theme users.
 
 > **macOS C++:** run `brew install gcc` if you need `bits/stdc++.h` — CPOS auto-detects Homebrew's g++.
 

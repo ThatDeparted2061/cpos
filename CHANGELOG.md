@@ -5,7 +5,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.0 | `Cargo.toml` |
-| VS Code extension | 0.3.16 | `extensions/vscode/package.json` |
+| VS Code extension | 0.3.20 | `extensions/vscode/package.json` |
 | Browser companion | 0.6.11 | `extensions/chrome/manifest.json` |
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
@@ -21,9 +21,30 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub Actions CI (`cargo test`, VS Code extension compile)
 - Issue and pull request templates
 - Terminal app: `plain` theme (neutral grayscale palette)
+- Terminal app: `light` theme (bright canvas for light terminal / VS Code light-theme users)
 
 ### Changed
 - Landing page redesign with optimized WebP screenshots
+
+---
+
+## VS Code extension — 0.3.20
+
+### Fixed
+- **Native theme Run All button** — uses VS Code button colors with white label text on light and dark editor themes
+- **Extension README screenshot** — panel preview image now loads in the Extensions detail view (GitHub-hosted URL)
+- **Build pipeline** — `npm run package` compiles TypeScript before packaging so panel CSS changes ship in the VSIX
+
+## VS Code extension — 0.3.17 – 0.3.19
+
+### Added
+- **Search** header button — Google search for editorials/solutions for the linked problem
+- **GitHub** header button — quick link to the CPOS repo
+- Branded CPOS logo in the panel header (`icon128.png`)
+
+### Changed
+- Replaced the capture-server status line in the header with Search / GitHub / theme controls
+- Styled header buttons (GitHub black, Search blue tint, theme accent)
 
 ---
 

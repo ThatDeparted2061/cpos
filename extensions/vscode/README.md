@@ -6,7 +6,7 @@ Open a problem in your browser. CPOS creates your solution file in the folder yo
 
 Part of the **CPOS** project — works with the [terminal app](https://github.com/Soham109/cpos) and [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm). All components sync over localhost.
 
-![CPOS VS Code panel with test cases and a Codeforces solution](media/vscode-panel-ui.png)
+![CPOS VS Code panel with test cases and a Codeforces solution](https://raw.githubusercontent.com/Soham109/cpos/main/extensions/vscode/media/vscode-panel-ui.png)
 
 ## How it works
 
@@ -23,8 +23,10 @@ Open the **CPOS** view in the activity bar:
 - **Run All** — compile and run every sample; verdicts shown inline (`AC`, `WA`, `TLE`, `RE`, `CE`)
 - **Submit** — queue submission and autofill the judge page in your logged-in browser
 - **Problem** — open the problem statement
+- **Search** — Google search for editorials and solutions for the linked problem
+- **GitHub** — open the CPOS repository
 - **Test cases** — edit, add, or remove samples; Codeforces multi-case inputs can show linked input/output blocks
-- **Themes** — CPOS, Midnight, Amber, Paper, or Native (matches your VS Code theme)
+- **Themes** — CPOS, Midnight, Amber, Paper, or Native (matches your VS Code theme; Run All uses VS Code button styling)
 
 Keep the **terminal app** running for browsing, recommendations, and analytics. Captures and submissions work with either app.
 
