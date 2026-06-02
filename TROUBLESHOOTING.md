@@ -23,10 +23,9 @@ If something isn’t listed here, open a [GitHub issue](https://github.com/Soham
    ```bash
    brew install gcc
    ```
-2. If Cursor or VS Code was opened from the Dock, launch from Terminal so PATH includes `/bin` and Homebrew:
+2. If VS Code was opened from the Dock (macOS), launch it from Terminal so PATH includes `/bin` and Homebrew:
    ```bash
-   cursor .
-   # or: code .
+   code .
    ```
 3. Open **View → Output → CPOS** to see the exact command CPOS ran.
 
@@ -105,7 +104,7 @@ Terminal app capture uses port `27121` — VS Code and TUI can both receive capt
 
 ## Terminal app — `cargo install` fails: `link.exe` not found
 
-**What it means:** Rust on Windows is using the **MSVC** toolchain but **Visual C++ build tools** are not installed. VS Code/Cursor does **not** include the linker.
+**What it means:** Rust on Windows is using the **MSVC** toolchain but **Visual C++ build tools** are not installed. VS Code does **not** include the linker.
 
 This is a Rust/Windows setup issue, not a CPOS bug.
 
