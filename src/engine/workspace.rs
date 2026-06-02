@@ -18,7 +18,8 @@
 //! Sample tests and compiler build artifacts are kept out of the workspace,
 //! in the app's data directory, so they never clutter the user's folders.
 
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
@@ -104,6 +105,57 @@ fn solution_basename(problem: &Problem) -> String {
 /// a single flat file like `codeforces/1095F.cpp` or `cses/WeirdAlgorithm.cpp`.
 pub fn solution_path(config: &Config, problem: &Problem, ext: &str) -> PathBuf {
     platform_dir(config, problem.platform).join(format!("{}.{}", solution_basename(problem), ext))
+}
+
+/// Flat solution file inside a user-chosen directory (matches VS Code workspace layout).
+pub fn solution_path_in_dir(dir: &Path, problem: &Problem, ext: &str) -> PathBuf {
+    dir.join(format!("{}.{}", solution_basename(problem), ext))
+}
+
+/// Whether `path` is under CPOS's default `~/cpos` tree (not the user's open project).
+pub fn is_default_cpos_tree(path: &Path, config: &Config) -> bool {
+    let root = root(config);
+    path.starts_with(&root)
+}
+
+/// Prefer the folder the user is actually working in: VS Code capture path, last session,
+/// or current directory when it looks like a project — not `~/cpos/codeforces/…`.
+pub fn active_user_save_dir(
+    config: &Config,
+    solution_paths: &HashMap<String, PathBuf>,
+) -> Option<PathBuf> {
+    for path in solution_paths.values() {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() && !is_default_cpos_tree(path, config) {
+                return Some(parent.to_path_buf());
+            }
+        }
+    }
+
+    if let Some((_, Some(path), _)) = load_latest_session() {
+        if !is_default_cpos_tree(&path, config) {
+            return path.parent().map(|p| p.to_path_buf());
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        if !is_default_cpos_tree(&cwd, config) {
+            let looks_like_project = cwd.join(".git").is_dir()
+                || cwd.read_dir().ok().is_some_and(|entries| {
+                    entries.filter_map(Result::ok).any(|e| {
+                        matches!(
+                            e.path().extension().and_then(|s| s.to_str()),
+                            Some("cpp" | "c" | "py" | "java" | "rs")
+                        )
+                    })
+                });
+            if looks_like_project {
+                return Some(cwd);
+            }
+        }
+    }
+
+    None
 }
 
 /// Path to the JSON file that caches sample tests — kept in the data dir,

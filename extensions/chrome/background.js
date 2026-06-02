@@ -104,184 +104,87 @@ async function findOrOpenTab(url) {
   return tab;
 }
 
-// Runs in Codeforces page MAIN world. Single owner of CF submit — content.js
-// does NOT fill the form (avoids the race that left an empty editor).
-// CPH-style: set the hidden textarea (authoritative for POST) + sync Ace for
-// display, set language/problem by .value WITHOUT change events, click Submit.
-async function cposSubmitOnPage(code, language, languageId, problemIndex, problemId) {
+// Runs in Codeforces page MAIN world — matches cph-submit injectedScript.ts:
+// set sourceCodeTextarea, programTypeId, submittedProblemIndex, click .submit.
+// Do NOT touch Ace or fire change events (CF reloads the editor and wipes code).
+async function cposSubmitOnPage(code, languageId, languageKey, problemIndex, submitByIndex, problemCode) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  function findTextarea() {
-    return (
-      document.getElementById("sourceCodeTextarea") ||
-      document.querySelector('textarea[name="source"]') ||
-      document.querySelector('textarea[name="sourceCode"]')
-    );
-  }
-
-  function findLang() {
-    return (
-      document.querySelector('select[name="programTypeId"]') ||
-      document.getElementById("programTypeId")
-    );
-  }
-
-  function findProblemCodeInput() {
-    const el = document.querySelector('input[name="submittedProblemCode"]');
-    return el instanceof HTMLInputElement ? el : null;
-  }
-
-  function findProblemIndexSelect() {
-    return document.querySelector('select[name="submittedProblemIndex"]');
-  }
-
-  function indexFromUrl() {
-    const params = new URLSearchParams(location.search);
-    return params.get("submittedProblemIndex") || params.get("submittedProblemCode") || null;
-  }
-
-  // Deterministic, ranked language selection. CF language IDs drift over time,
-  // so we match option TEXT in priority order (newest/correct variant first)
-  // and only use the numeric id as a last resort.
   const LANG_RANK = {
-    cpp: [/GNU G\+\+23/i, /GNU G\+\+20/i, /GNU G\+\+17/i, /G\+\+23/i, /G\+\+20/i, /G\+\+17/i, /Clang\+\+[^0-9]*(?:20|17)/i, /GNU G\+\+14/i, /G\+\+/i],
-    c: [/GNU GCC C11/i, /GNU GCC C\b/i, /\bGNU C\b/i, /\bGCC\b/i],
-    python: [/^Python 3/i, /Python 3\.\d/i, /\bPython 3\b/i, /PyPy 3/i, /CPython/i],
+    cpp: [/GNU G\+\+23/i, /GNU G\+\+20/i, /GNU G\+\+17/i, /G\+\+23/i, /G\+\+20/i, /G\+\+17/i, /G\+\+/i],
+    c: [/GNU GCC C11/i, /GNU GCC C\b/i, /\bGNU C\b/i],
+    python: [/^Python 3/i, /Python 3\.\d/i, /\bPython 3\b/i, /PyPy 3/i],
     pypy: [/PyPy 3/i, /PyPy/i],
-    java: [/Java 21/i, /Java 17/i, /Java 11/i, /Java 8/i, /\bJava\b/i],
-    kotlin: [/Kotlin 1\.\d/i, /Kotlin/i],
+    java: [/Java 21/i, /Java 17/i, /Java 11/i, /\bJava\b/i],
+    kotlin: [/Kotlin/i],
     rust: [/Rust 1\.\d/i, /Rust/i],
     go: [/\bGo\b/i],
     csharp: [/\.NET[^#]*C#/i, /Mono C#/i, /C#/i],
     javascript: [/Node\.js/i, /JavaScript/i],
-    ruby: [/Ruby 3/i, /Ruby/i],
+    ruby: [/Ruby/i],
     haskell: [/Haskell/i],
-    pascal: [/PascalABC/i, /Free Pascal/i, /Delphi/i, /Pascal/i]
+    pascal: [/PascalABC/i, /Free Pascal/i, /Delphi/i]
   };
 
-  function selectLanguage(select) {
-    if (!select || select.options.length <= 1) return false;
-    const ranks = LANG_RANK[language] || [];
-    for (const re of ranks) {
-      for (const opt of select.options) {
-        if (re.test(opt.textContent || "")) {
-          select.value = opt.value;
-          return true;
-        }
-      }
-    }
+  function pickLanguage(select) {
+    if (!select || select.options.length <= 1) return;
     if (languageId != null) {
       const want = String(languageId);
       for (const opt of select.options) {
         if (opt.value === want) {
           select.value = opt.value;
-          return true;
+          return;
         }
       }
     }
-    return false;
-  }
-
-  function setProblem() {
-    const input = findProblemCodeInput();
-    if (input) {
-      const id = problemId || problemIndex || indexFromUrl();
-      if (id) {
-        input.value = String(id);
-        return true;
-      }
-      return false;
-    }
-    const select = findProblemIndexSelect();
-    const idx = problemIndex || indexFromUrl();
-    if (select && idx) {
-      const want = String(idx).toUpperCase();
+    const ranks = LANG_RANK[languageKey] || [];
+    for (const re of ranks) {
       for (const opt of select.options) {
-        const val = (opt.value || "").toUpperCase();
-        const text = (opt.textContent || "").trim().toUpperCase();
-        if (
-          val === want ||
-          text === want ||
-          text.startsWith(`${want} `) ||
-          text.startsWith(`${want}.`) ||
-          new RegExp(`^${want}\\b`).test(text)
-        ) {
+        if (re.test(opt.textContent || "")) {
           select.value = opt.value;
-          return true;
+          return;
         }
       }
     }
-    return false;
   }
 
-  function syncAce(text) {
-    let ed = null;
-    if (typeof window.ace !== "undefined" && typeof window.ace.edit === "function") {
-      try {
-        ed = window.ace.edit("editor");
-      } catch {
-        /* ignore */
-      }
-    }
-    const editorDiv = document.querySelector("#editor");
-    if (!ed && editorDiv?.env?.editor) ed = editorDiv.env.editor;
-    if (!ed) return;
-    try {
-      ed.setValue(text, -1);
-      ed.clearSelection();
-      ed.resize();
-    } catch {
-      /* ignore */
-    }
-  }
+  for (let i = 0; i < 100; i++) {
+    const sourceCodeEl = document.getElementById("sourceCodeTextarea");
+    const languageEl = document.getElementsByName("programTypeId")[0];
+    const submitBtn = document.querySelector(".submit");
 
-  function clickSubmit() {
-    const candidates = [
-      document.getElementById("singlePageSubmitButton"),
-      document.querySelector("form.submit-form input.submit[type='submit']"),
-      document.querySelector("form.submit-form input[type='submit']"),
-      document.querySelector("input.submit[type='submit']"),
-      document.querySelector(".submit")
-    ];
-    for (const btn of candidates) {
-      if (btn && !btn.disabled) {
-        btn.disabled = false;
-        btn.click();
-        return true;
-      }
-    }
-    const form =
-      document.querySelector("form.submit-form") ||
-      document.querySelector('form[action*="submit"]');
-    if (form && typeof form.requestSubmit === "function") {
-      form.requestSubmit();
-      return true;
-    }
-    return false;
-  }
+    if (
+      sourceCodeEl &&
+      languageEl &&
+      languageEl.options.length > 1 &&
+      submitBtn &&
+      String(code).trim()
+    ) {
+      sourceCodeEl.value = code;
+      pickLanguage(languageEl);
 
-  for (let i = 0; i < 80; i++) {
-    const textarea = findTextarea();
-    const lang = findLang();
-    if (textarea && lang && lang.options.length > 1) {
-      // Language + problem first (quiet), then source. Ace's own change
-      // listener mirrors into the textarea; we hard-set the textarea too.
-      selectLanguage(lang);
-      setProblem();
-      syncAce(code);
-      textarea.value = code;
-
-      await sleep(150);
-      if (!textarea.value.trim()) {
-        syncAce(code);
-        textarea.value = code;
-        await sleep(150);
+      if (submitByIndex && problemIndex) {
+        const problemIndexEl = document.getElementsByName("submittedProblemIndex")[0];
+        if (problemIndexEl) {
+          problemIndexEl.value = String(problemIndex);
+        }
+      } else if (problemCode) {
+        const codeInput = document.querySelector('input[name="submittedProblemCode"]');
+        if (codeInput) {
+          codeInput.value = String(problemCode);
+        }
       }
 
-      if (textarea.value.trim()) {
-        if (clickSubmit()) return { ok: true };
+      if (!sourceCodeEl.value.trim()) {
+        await sleep(200);
+        continue;
       }
+
+      submitBtn.disabled = false;
+      submitBtn.click();
+      return { ok: true };
     }
+
     await sleep(250);
   }
 
@@ -362,55 +265,60 @@ async function cposCsesSubmitOnPage(code, fileName, language) {
   return { ok: false, reason: "cses-form-timeout" };
 }
 
-// Guards against resubmitting the same solution if a poll fires again after a
-// successful submit (e.g. result lost because CF navigated to the status page).
-let lastCfSubmitKey = null;
-
-function cposHash(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (h * 31 + str.charCodeAt(i)) | 0;
+function cfSubmitFlags(pending) {
+  let pathname = "";
+  try {
+    pathname = new URL(pending.submitUrl || "").pathname;
+  } catch {
+    pathname = "";
   }
-  return h;
+  const submitByIndex =
+    /\/contest\/\d+\/submit/.test(pathname) ||
+    /\/gym\/\d+\/submit/.test(pathname) ||
+    /\/group\/[^/]+\/contest\/\d+\/submit/.test(pathname);
+  const problemIndex = pending.index || null;
+  const problemCode = submitByIndex ? null : pending.id || null;
+  return { submitByIndex, problemIndex, problemCode };
 }
 
 async function handleCodeforces(pending, _endpoint) {
-  const key = `${pending.id}:${pending.index || ""}:${cposHash(pending.code)}`;
-  if (key === lastCfSubmitKey) return true;
-
   const tab = await findOrOpenTab(pending.submitUrl);
   if (!tab?.id) return false;
 
-  // Give the submit page time to load Ace + the language list.
-  await sleep(1000);
-
   const languageId = CF_LANGUAGE_IDS[pending.language] ?? null;
+  const { submitByIndex, problemIndex, problemCode } = cfSubmitFlags(pending);
 
-  let ok = false;
-  try {
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id, allFrames: false },
-      world: "MAIN",
-      func: cposSubmitOnPage,
-      args: [pending.code, pending.language || "cpp", languageId, pending.index || null, pending.id || null]
-    });
-    ok = results?.[0]?.result?.ok === true;
-  } catch {
-    // The script result was lost — most likely CF navigated away after a
-    // successful submit. Confirm by checking the tab left the /submit page.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (attempt > 0) await sleep(800);
+
+    let ok = false;
     try {
-      const t = await chrome.tabs.get(tab.id);
-      if (t?.url && !/\/submit/.test(new URL(t.url).pathname)) ok = true;
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: false },
+        world: "MAIN",
+        func: cposSubmitOnPage,
+        args: [
+          pending.code,
+          languageId,
+          pending.language || "cpp",
+          problemIndex,
+          submitByIndex,
+          problemCode
+        ]
+      });
+      ok = results?.[0]?.result?.ok === true;
     } catch {
-      /* tab gone — treat as submitted */
-      ok = true;
+      try {
+        const t = await chrome.tabs.get(tab.id);
+        if (t?.url && !/\/submit/.test(new URL(t.url).pathname)) ok = true;
+      } catch {
+        ok = true;
+      }
     }
+
+    if (ok) return true;
   }
 
-  if (ok) {
-    lastCfSubmitKey = key;
-    return true;
-  }
   return false;
 }
 
@@ -461,7 +369,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         target: { tabId, allFrames: false },
         world: "MAIN",
         func: cposSubmitOnPage,
-        args: [msg.code, msg.language || "cpp", msg.languageId ?? null, msg.problemIndex ?? null, msg.problemId ?? null]
+        args: [
+          msg.code,
+          msg.languageId ?? null,
+          msg.language || "cpp",
+          msg.problemIndex ?? null,
+          msg.submitByIndex !== false,
+          msg.problemCode ?? null
+        ]
       })
       .then((results) => {
         sendResponse(results?.[0]?.result || { ok: false, reason: "empty-result" });

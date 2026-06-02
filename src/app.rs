@@ -904,6 +904,38 @@ impl App {
             });
         }
 
+        if let Some(user_dir) =
+            workspace::active_user_save_dir(&self.config, &self.solution_paths)
+        {
+            let solution_path = workspace::solution_path_in_dir(&user_dir, &problem, &ext);
+            let already_existed = solution_path.exists();
+            if let Some(parent) = solution_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if !already_existed {
+                if std::fs::write(&solution_path, &template).is_err() {
+                    self.status_message =
+                        format!("Could not create solution file at {}", solution_path.display());
+                    return None;
+                }
+            }
+            self.set_solution_path(&problem, solution_path.clone());
+            self.persist_session(&problem, Some(&solution_path));
+            let url = problem.url.clone();
+            self.status_message = format!(
+                "{} {} — {}",
+                if already_existed { "Reopened" } else { "Started" },
+                problem.id,
+                solution_path.display()
+            );
+            return Some(StartedProblem {
+                problem,
+                solution_path,
+                url,
+                already_existed,
+            });
+        }
+
         let already_existed = workspace::solution_path(&self.config, &problem, &ext).exists();
         let solution_path = match workspace::scaffold(&self.config, &problem, &ext, &template) {
             Ok(p) => p,
