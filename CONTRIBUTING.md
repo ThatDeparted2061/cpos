@@ -4,7 +4,7 @@ Thanks for taking the time to contribute. CPOS is open source (MIT) — bug repo
 
 For security issues, see [SECURITY.md](SECURITY.md) — do not open public issues for vulnerabilities.
 
-For how the pieces fit together, see [ARCHITECTURE.md](ARCHITECTURE.md). Release history and current versions are in [CHANGELOG.md](CHANGELOG.md).
+For how the pieces fit together, see [ARCHITECTURE.md](ARCHITECTURE.md). Release history and current versions are in [CHANGELOG.md](CHANGELOG.md). Common user issues: [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 | Component | Current version |
 | --- | --- |

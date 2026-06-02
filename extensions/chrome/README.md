@@ -19,6 +19,10 @@ Also install the **[CPOS VS Code extension](https://marketplace.visualstudio.com
 
 Data is not sent to third-party servers—only to CPOS on localhost.
 
+## Troubleshooting
+
+See [TROUBLESHOOTING.md](../../TROUBLESHOOTING.md) (submit language, capture, Chrome login).
+
 ## Development
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) and [STORE_LISTING.md](STORE_LISTING.md).
