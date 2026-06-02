@@ -91,6 +91,11 @@ Injects autofill logic only on Codeforces and CSES submit pages when CPOS queues
 Finds an existing Codeforces/CSES tab or opens one when the user submits from CPOS, so the submit form can be autofilled in the correct logged-in session.
 ```
 
+### Permission: `alarms`
+```
+Chrome may suspend the extension's background worker when idle. CPOS uses a local alarm every 30 seconds solely to wake that worker and check whether the user queued a submission from CPOS (VS Code or desktop app) on localhost. The alarm does not read browsing data, does not contact external servers, and does not run unless the extension is installed.
+```
+
 ---
 
 ## Data usage certification

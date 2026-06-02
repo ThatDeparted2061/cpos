@@ -48,6 +48,7 @@ The extension does not persist problem data, source code, or personal informatio
 |------------|------------------|
 | `scripting` | Autofill submit forms on Codeforces/CSES when you submit from CPOS |
 | `tabs` | Find or open the correct browser tab for submission autofill |
+| `alarms` | Wake the background worker periodically so queued submissions from CPOS are picked up quickly; no data is read or sent by this alarm |
 | `127.0.0.1:27121/27122` | Talk to CPOS running on your computer |
 | `codeforces.com`, `cses.fi` | Read problem pages you visit and interact with submit pages |
 
