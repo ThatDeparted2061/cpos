@@ -1703,7 +1703,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
         : "";
       const blkClass = blk >= 0 && blk % 2 ? "even" : "odd";
       const blkId = blk >= 0 ? blk : -1;
-      // Background rows are stripe/gutter only — text lives in the textarea to avoid double-render ghosting.
+      // Background rows are stripe/gutter only — text lives in the textarea to avoid duplicate rendering.
       return '<div class="ln blk-' + blkClass + '" data-blk="' + blkId + '" data-line="' + i + '"><span class="ln-gutter">' + gutterTxt + '</span><span class="ln-txt">' + (line.length ? "x" : "&nbsp;") + '</span></div>';
     }).join("");
   }

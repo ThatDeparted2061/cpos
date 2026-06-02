@@ -1,58 +1,44 @@
 # CPOS
 
-**Competitive programming for Codeforces and CSES — right inside VS Code.**
+**Competitive programming for Codeforces and CSES — in VS Code.**
 
-Open a problem in your browser. CPOS creates your solution file in the folder you have open, loads the sample tests, and gives you a side panel to run and submit.
+Open a problem in your browser. CPOS creates your solution file in the folder you have open, loads the sample tests, and provides a side panel to run samples and submit.
 
-Part of the **CPOS ecosystem** — works alongside the [terminal app](https://github.com/Soham109/cpos) and [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm). All three sync over localhost.
-
-Panel layout inspired by [CPH (Competitive Programming Helper)](https://marketplace.visualstudio.com/items?itemName=DivyanshuRaj.competitive-programming-helper).
+Part of the **CPOS** project — works with the [terminal app](https://github.com/Soham109/cpos) and [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm). All components sync over localhost.
 
 ![CPOS VS Code panel with test cases and a Codeforces solution](media/vscode-panel-ui.png)
 
 ## How it works
 
-1. Install from the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode)** and the **[Chrome Web Store companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)**
-2. **Open the folder** where you want your solution files — any folder you like
+1. Install from the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode)** and the **[browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)**
+2. Open the folder where you want solution files
 3. Open a Codeforces or CSES problem in your browser
-4. CPOS automatically creates the file (e.g. `1971D.cpp`) with samples attached and opens it in VS Code
-5. Write your code, then use the **CPOS panel** to **Run All** or **Submit**
-
-No copy-pasting samples. No manually creating files.
+4. CPOS creates the solution file (for example `1982C.cpp`) with samples attached
+5. Write code and use the **CPOS panel** to **Run All** or **Submit**
 
 ## The CPOS panel
 
-Click the **CPOS** icon in the left activity bar:
+Open the **CPOS** view in the activity bar:
 
-- **Run All** — compile and run every sample, see `AC` / `WA` / `TLE` / `RE` / `CE` inline
-- **Submit** — autofill the submit page in your logged-in browser tab
-- **Problem** — open the statement again
-- Edit, add, or remove test cases — saved per file
+- **Run All** — compile and run every sample; verdicts shown inline (`AC`, `WA`, `TLE`, `RE`, `CE`)
+- **Submit** — queue submission and autofill the judge page in your logged-in browser
+- **Problem** — open the problem statement
+- **Test cases** — edit, add, or remove samples; Codeforces multi-case inputs can show linked input/output blocks
+- **Themes** — CPOS, Midnight, Amber, Paper, or Native (matches your VS Code theme)
 
-This is the editor side of CPOS. Keep the **terminal app** running for browsing, recommendations, and analytics — captures and submits work through either one.
-
-## Themes
-
-Click **◑ theme** in the panel header to change how the panel looks. Your choice is saved across reloads.
-
-| Theme | Look |
-| --- | --- |
-| **CPOS** | Signature purple — the default |
-| **Midnight** | Calm slate-blue |
-| **Amber** | Warm terminal / sepia |
-| **Paper** | High-contrast grayscale, minimal color |
-| **Native** | Inherits your active VS Code color theme — no custom background |
+Keep the **terminal app** running for browsing, recommendations, and analytics. Captures and submissions work with either app.
 
 ## Settings
 
-`Settings → Extensions → CPOS` — change save folder, language, template, compile commands, timeouts.
+`Settings → Extensions → CPOS` — save folder, language, template, compile commands, timeouts.
 
-By default, files are created in **whatever folder you currently have open** in VS Code.
+By default, files are created in the **currently open workspace folder**.
 
-Submit opens the judge in your browser; the [CPOS browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) fills the form and clicks Submit.
+Submit requires the [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) and an active login on the judge site.
 
 ## Links
 
 - [CPOS on GitHub](https://github.com/Soham109/cpos)
-- [Browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)
+- [Changelog](../../CHANGELOG.md)
+- [Architecture](../../ARCHITECTURE.md)
 - [Report an issue](https://github.com/Soham109/cpos/issues)

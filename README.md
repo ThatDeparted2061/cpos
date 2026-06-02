@@ -46,14 +46,13 @@ Write code in the editor. The CPOS panel runs samples and submits.
   <img src="docs/img/vscode-panel-ui.png" alt="CPOS VS Code panel with test cases, Run All, Submit, and a Codeforces solution open" width="900">
 </p>
 
-<p align="center"><sub>Panel layout inspired by <a href="https://marketplace.visualstudio.com/items?itemName=DivyanshuRaj.competitive-programming-helper">CPH</a> (Competitive Programming Helper).</sub></p>
-
 Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode). Open your folder, capture a problem from the browser, then use the **CPOS panel**:
 
 - **Run All** — compile and test every sample
-- **Submit** — autofill the judge submit page
-- **Problem** — jump back to the statement
-- **◑ theme** — switch the panel look (5 themes, see [Settings](#settings))
+- **Submit** — autofill the judge submit page in your logged-in browser
+- **Problem** — open the statement again
+- **Test cases** — edit samples; multi-case inputs show linked input/output blocks when captured from Codeforces
+- **Theme** — five panel themes (see [Settings](#settings))
 
 ---
 
@@ -68,7 +67,7 @@ cpos
 
 | Key | What it does |
 | --- | --- |
-| `o` / `Enter` | Open a problem — creates the file, loads samples, opens your editor |
+| `o` / `Enter` | Open a problem — creates the file in your project folder when VS Code has synced a path, otherwise in `~/cpos` or your configured workspace |
 | `T` | Run against samples |
 | `s` | Submit |
 | `b` | Open problem in browser |
@@ -83,12 +82,12 @@ Keep the terminal running while you code in VS Code — same captures, same subm
 
 ## Your folder, your files
 
-You choose where files go:
+You choose where solution files live:
 
-- **VS Code:** open any project folder before you capture. CPOS creates `1971D.cpp` (or whatever the problem is) right inside it.
-- **Terminal app:** defaults to `~/cpos/`, or point it at any directory you like.
+- **VS Code:** open a project folder before you capture. CPOS creates files such as `1982C.cpp` in that folder.
+- **Terminal:** defaults to `~/cpos/`, or uses the same project folder as VS Code when captures have been synced.
 
-Change the save location in **Settings → Extensions → CPOS** (`cpos.saveLocation`, `cpos.fixedDir`).
+Configure the VS Code save location under **Settings → Extensions → CPOS** (`cpos.saveLocation`, `cpos.fixedDir`). Configure the terminal workspace in `config.toml` (`workspace_dir`).
 
 ---
 
@@ -128,7 +127,7 @@ That pulls the latest version and reinstalls. Your config and problem data are k
 ## Features
 
 - **Auto file creation** — open a problem, get a ready-to-edit solution file in your folder
-- **Sample capture** — public tests pulled from the problem page automatically
+- **Sample capture** — public tests pulled from the problem page, with multi-case grouping on Codeforces when available
 - **Run & submit** — from the VS Code panel or terminal keys; submit autofills your browser
 - **13 languages** — C, C++, Python, PyPy, Java, Kotlin, Rust, Go, C#, JS, Ruby, Haskell, Pascal
 - **Progress & analytics** — rating history, topic breakdown, activity heatmap
@@ -177,7 +176,7 @@ Press **`r`** after solving more problems to refresh recommendations.
 | `cpos.defaultLanguage` | `cpp` | Language for new files |
 | `cpos.runTimeoutMs` | `5000` | Per-test timeout |
 
-**Panel themes** — click **◑ theme** in the CPOS panel header to switch the look. Your choice is remembered.
+**Panel themes** — use the theme control in the CPOS panel header. Your choice is remembered.
 
 | Theme | Look |
 | --- | --- |

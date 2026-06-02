@@ -104,9 +104,8 @@ async function findOrOpenTab(url) {
   return tab;
 }
 
-// Runs in Codeforces page MAIN world — matches cph-submit injectedScript.ts:
-// set sourceCodeTextarea, programTypeId, submittedProblemIndex, click .submit.
-// Do NOT touch Ace or fire change events (CF reloads the editor and wipes code).
+// Runs in the Codeforces page main world: set sourceCodeTextarea, programTypeId,
+// problem field, then click .submit. Do not fire change events on selects (resets Ace).
 async function cposSubmitOnPage(code, languageId, languageKey, problemIndex, submitByIndex, problemCode) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

@@ -1,14 +1,16 @@
 # CPOS architecture
 
-CPOS is three local clients plus a static website. Nothing runs in the cloud; the browser extension and apps only talk to `127.0.0.1`.
+CPOS is three local clients plus a static website. Nothing runs in the cloud; the browser extension and desktop apps communicate only over `127.0.0.1`.
+
+**Current releases:** terminal app 0.1.0 · VS Code extension 0.3.13 · browser companion 0.6.6 (see [CHANGELOG.md](CHANGELOG.md)).
 
 ```
-┌─────────────────┐     capture/submit      ┌──────────────────┐
+┌─────────────────┐     capture / submit      ┌──────────────────┐
 │ Browser         │ ───────────────────────▶│ VS Code (:27122) │
-│ (Chrome ext)    │                         │  extension       │
+│ (Chrome ext.)   │                         │  extension       │
 └────────┬────────┘                         └────────┬─────────┘
          │                                           │
-         │ capture/submit                            │ forward capture
+         │ capture / submit                          │ forward capture
          ▼                                           ▼
 ┌─────────────────┐                         ┌──────────────────┐
 │ Terminal TUI    │◀────── localhost ──────▶│ Shared data dirs │
@@ -20,65 +22,76 @@ CPOS is three local clients plus a static website. Nothing runs in the cloud; th
 
 | Path | Role |
 | --- | --- |
-| `src/` | Rust terminal app (ratatui UI, sync, recommendations, test runner) |
-| `extensions/vscode/` | VS Code webview panel + capture HTTP server |
-| `extensions/chrome/` | Content scripts on Codeforces/CSES; posts to localhost |
+| `src/` | Terminal application (ratatui UI, sync, recommendations, local test runner) |
+| `extensions/vscode/` | VS Code extension: side panel, webview UI, capture HTTP server |
+| `extensions/chrome/` | Browser companion: DOM capture on problem pages, submit autofill on judge pages |
 | `docs/` | Static landing site |
 
 ## Localhost protocol
 
-Both CPOS apps expose a tiny HTTP API on loopback only.
+Both CPOS applications expose a small HTTP API bound to the loopback interface.
 
-| Port | Owner | Default |
+| Port | Owner | Implementation |
 | --- | --- | --- |
 | `27121` | Terminal TUI | `src/engine/capture.rs` |
 | `27122` | VS Code extension | `extensions/vscode/src/extension.ts` |
 
-The browser companion tries **both** ports so either app can receive captures.
-
-Common endpoints:
+The browser companion polls **both** ports so captures and submissions work whether one or both apps are running.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/capture/problem` | Problem metadata + sample tests from browser |
-| `POST` | `/capture/cses-progress` | CSES solved/attempted task ids |
-| `GET` | `/pending-submit` | Browser polls for code to autofill on submit |
-| `POST` | `/pending-submit/consumed` | Ack after autofill |
+| `POST` | `/capture/problem` | Problem metadata, sample tests, optional `solution_path` from VS Code |
+| `POST` | `/capture/cses-progress` | CSES solved and attempted task identifiers |
+| `GET` | `/pending-submit` | Browser polls for a queued submission |
+| `POST` | `/pending-submit/consumed` | Clear the queue after autofill completes |
 | `GET` | `/health` | Liveness check |
 
-CORS is open (`*`) because traffic never leaves the machine.
+Cross-origin headers are permissive because traffic never leaves the machine.
 
-## Typical capture flow
+## Capture flow
 
-1. User opens a Codeforces/CSES problem in the browser (logged in if submitting later).
-2. Content script reads public samples from the DOM.
-3. Extension `POST`s JSON to `127.0.0.1:27122` (VS Code) and/or `27121` (TUI).
-4. Receiving app creates/updates a solution file, saves samples, opens the editor (optional).
-5. VS Code forwards captures to the TUI when both are running.
+1. The user opens a Codeforces or CSES problem in the browser (logged in when they plan to submit later).
+2. A content script reads public sample input and output from the page DOM.
+3. On Codeforces, when the statement uses grouped sample lines, the companion also records per-block line counts (`input_block_sizes`) for the VS Code panel.
+4. The companion `POST`s JSON to `127.0.0.1:27122` and/or `27121`.
+5. The receiving app stores samples, creates or updates a solution file, and optionally opens the editor.
+6. VS Code forwards captures to the TUI when both are running, including the on-disk `solution_path` when files are saved in the open workspace folder.
 
 ## Submit flow
 
-1. User runs **Submit** from VS Code or presses `s` in the TUI.
-2. App queues `{ code, language, submitUrl, … }` on localhost.
-3. Browser extension polls `/pending-submit`, opens the judge submit page, fills the form, clicks submit.
-4. User stays logged in via their normal browser session — CPOS never sees passwords.
+CPOS does **not** post solutions to Codeforces or CSES from the editor over HTTP. That approach conflicts with anti-bot protection and session handling. Instead, the editor queues submission data locally and the browser companion autofills the judge form in the user’s existing logged-in tab.
 
-## Data on disk
+1. The user runs **Submit** in VS Code or presses `s` in the terminal.
+2. The active app writes `{ code, language, submitUrl, contest, index, … }` and serves it at `GET /pending-submit`.
+3. The browser companion opens or focuses the submit URL, waits for the form, and runs an injected script in the page **main world** (required for the source textarea and submit controls).
+4. The script sets the hidden source field, program language, and problem identifier, then activates the submit control. It avoids `change` events on language or problem fields that would reset the Ace editor and clear the source.
+5. On success, the app receives `POST /pending-submit/consumed`.
+
+Passwords and session cookies remain in the browser; CPOS does not read or store judge credentials.
+
+## Solution files and sync
 
 | Location | Contents |
 | --- | --- |
+| User’s open folder (VS Code) | Solution sources (e.g. `1982C.cpp`) when `cpos.saveLocation` is `workspaceFolder` |
+| `~/cpos/` or configured `workspace_dir` | Default terminal workspace (`codeforces/`, `cses/`, templates) |
 | `~/.config/cpos/` or `~/Library/Application Support/cpos/` | TUI config, SQLite cache, CSES progress |
-| `~/.cpos-vscode/` | VS Code samples, problem metadata, build artifacts |
-| User's open folder | Solution source files (e.g. `1971D.cpp`) |
+| `~/.cpos-vscode/` | VS Code sample cache, problem metadata, compile artifacts |
 
-Config keys like `default_language` and `[compile_commands.*]` are shared between TUI and VS Code where possible.
+When VS Code has forwarded a `solution_path`, or the terminal detects a recent session or project-like working directory, pressing **`o`** in the TUI creates new problems in that folder instead of only under `~/cpos/`.
 
-## Sync (terminal)
+Shared settings (default language, compile commands, templates) are read from TUI config where the VS Code extension can access them.
 
-Background task fetches Codeforces API data (problems, submissions, rating, contests) into a local SQLite cache. Recommendations and analytics read from that cache — no repeated network calls during normal TUI use.
+## VS Code panel (summary)
 
-Press `r` to refresh. CSES progress can come from the browser companion when a session cookie isn't available server-side.
+The webview panel stores samples per solution file, runs compile-and-test locally, and can highlight multi-case sample input when block metadata is available. Panel chrome (themes, column layout) is client-side only and does not affect the localhost protocol.
 
-## Building each piece
+## Terminal sync
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for dev commands. CI runs `cargo test` and `npm run compile` in `extensions/vscode` on every push to `main`.
+A background task fetches Codeforces API data (problems, submissions, rating, contests) into a local SQLite cache. Recommendations and analytics read from that cache during normal TUI use.
+
+Press `r` to refresh. CSES progress can be updated from the browser companion when a server-side session cookie is not configured.
+
+## Build and CI
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development commands. Continuous integration runs `cargo test` and compiles the VS Code extension on pushes to `main`.

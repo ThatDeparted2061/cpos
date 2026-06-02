@@ -5,100 +5,100 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.0 | `Cargo.toml` |
-| VS Code extension | **0.3.13** | `extensions/vscode/package.json` |
-| Browser companion | **0.6.6** | `extensions/chrome/manifest.json` |
+| VS Code extension | 0.3.13 | `extensions/vscode/package.json` |
+| Browser companion | 0.6.6 | `extensions/chrome/manifest.json` |
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
 ### Terminal app
-- Pressing **`o`** / Enter to open a problem now creates the solution file in your **active project folder** when VS Code has synced a path, a recent session points outside `~/cpos`, or your shell cwd looks like a project — instead of always using `~/cpos/codeforces/…`
+- Opening a problem with **`o`** or Enter now prefers your **active project directory** when VS Code has synced a solution path, a recent session points outside the default `~/cpos` tree, or the shell working directory looks like a project.
 
 ### Added
-- Community docs: `CONTRIBUTING.md`, `SECURITY.md`, `ARCHITECTURE.md`
+- Community documentation: `CONTRIBUTING.md`, `SECURITY.md`, `ARCHITECTURE.md`
 - GitHub Actions CI (`cargo test`, VS Code extension compile)
 - Issue and pull request templates
-- Terminal app: `plain` theme — neutral grayscale palette for a low-color interface
+- Terminal app: `plain` theme (neutral grayscale palette)
 
 ### Changed
-- Landing page redesign with optimized WebP screenshots and ecosystem section
+- Landing page redesign with optimized WebP screenshots
 
 ---
 
 ## Browser companion — 0.6.6
 
 ### Fixed
-- **Codeforces submit** now follows the same flow as [cph-submit](https://github.com/agrawal-d/cph-submit): paste into `sourceCodeTextarea`, set `programTypeId`, set problem field, click `.submit` — without touching Ace or firing `change` events (which wiped the editor)
-- Language selection: try the numeric id first, then ranked text matching (e.g. G++17 before G++14) when Codeforces changes ids
-- Retry injection up to 8 times while the submit page loads; removed a guard that blocked retries after a failed attempt
-- Single owner for CF submit in the background worker (content script no longer races to fill the form in an isolated world without Ace access)
+- **Codeforces submit:** reliable autofill by setting the source textarea first, then language and problem fields, then activating the submit control—without resetting the Ace editor
+- **Language selection:** numeric program type id when available, with ranked fallback on compiler display names when Codeforces updates ids
+- **Retries:** up to eight injection attempts while the submit page loads
+- **Concurrency:** background worker is the sole submit handler; avoids conflicting fills from the isolated content-script world
 
 ## Browser companion — 0.6.3 – 0.6.5
 
 ### Added
-- Capture **Codeforces sub-test-case block metadata** from `test-example-line-N` classes so the VS Code panel can highlight input blocks that match each expected output line
+- Capture of Codeforces **sub-test-case block metadata** (`test-example-line-*`) for aligned input/output highlighting in the VS Code panel
 
 ### Fixed
-- Codeforces submit: quiet form fill, MAIN-world injection only, longer tab-load wait
-- CSES submit unchanged (still working)
+- Codeforces submit uses main-world injection and extended page-load timing
+- CSES submit behavior unchanged
 
 ## Browser companion — 0.6.2
 
 ### Fixed
-- Codeforces submit on **contest** and **problemset** pages (`submittedProblemIndex` vs `submittedProblemCode`)
+- Codeforces submit on contest pages (`submittedProblemIndex`) and problemset pages (`submittedProblemCode`)
 
 ## Browser companion — 0.6.1
 
 ### Added
 - Sample capture from Codeforces and CSES problem pages
 - Submit form autofill when submitting from CPOS
-- CSES solved/attempted progress scraping
+- CSES solved and attempted progress scraping
 - Localhost-only communication (`127.0.0.1:27121` / `27122`)
-- Published on Chrome Web Store
+- Initial Chrome Web Store release
 
 ---
 
 ## VS Code extension — 0.3.13
 
 ### Added
-- **Test-case block hover** in the panel: zebra stripes per sub-test-case, gutter numbers, and highlight that links input blocks to expected output lines (uses block metadata from the browser companion when available)
-- **Draggable split** between Input and Expected columns; ratio saved in panel state
-- Wider default column for input (expected output is often one line per case)
+- **Test-case panel:** per-block striping, gutter labels, and linked highlight between input blocks and expected output lines when block metadata is present
+- **Resizable columns** between input and expected output; ratio persisted in panel state
+- Wider default width for multi-line sample input
 
 ### Fixed
-- Removed double-render “ghost” text on input lines (background layer is stripes only; text comes from the textarea)
+- Duplicate text rendering on striped input rows (decoration layer shows stripes only; editable text remains in the textarea)
 
 ## VS Code extension — 0.3.10 – 0.3.12
 
 ### Added
-- Resizable input/output layout and improved test-case panel layout (0.3.10)
+- Resizable input and output layout in the test panel (0.3.10)
 
 ### Fixed
-- Text rendering ghosting on striped input rows (0.3.12)
+- Visual artifact on striped input rows (0.3.12)
 
 ## VS Code extension — 0.3.9
 
 ### Fixed
-- Codeforces submit pipeline coordination with the browser companion (queue + open submit URL)
+- Submit coordination with the browser companion (localhost queue and submit URL)
 
 ## VS Code extension — 0.3.8
 
 ### Added
-- Panel themes: pick from **CPOS**, **Midnight**, **Amber**, **Paper**, and **Native** (matches your VS Code color theme) via the `◑ theme` button in the panel header — choice is remembered
+- Panel themes: **CPOS**, **Midnight**, **Amber**, **Paper**, and **Native** (follows the active VS Code theme); selection persisted via the theme control in the panel header
 
 ### Changed
-- Refreshed panel UI: higher text contrast, lifted surfaces, rounded cards, and a branded header — less generic, more in line with the CPOS look
+- Refreshed panel visual design: improved contrast, card layout, branded header
 
 ## VS Code extension — 0.3.7
 
 ### Added
 - CPOS side panel: run samples, submit, open problem
 - Browser capture server on port `27122`
-- Auto file creation in open workspace folder
+- Automatic file creation in the open workspace folder
 - Per-file sample storage and inline pass/fail results
 - Configurable language, compile commands, and save location
-- Sync with TUI over localhost
+- Localhost sync with the terminal app
 
 ---
 
@@ -106,13 +106,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - TUI with Dashboard, Problems, Contests, Analytics, and Recommend tabs
-- Local problem browser with search, rating filter, and platform switch
+- Local problem browser with search, rating filter, and platform filter
 - Codeforces sync (problems, submissions, rating, contests)
-- CSES progress sync via browser companion
-- Recommendation engine (30 unsolved problems targeting weak tags)
+- CSES progress sync via the browser companion
+- Recommendation engine (30 unsolved problems targeting weak topics)
 - Localhost capture server on port `27121`
-- Sample test runner and browser submit autofill (via Chrome companion)
+- Local sample test runner; submit via the browser companion
 
 ---
 
-When cutting a release, add a dated section, bump the version in the component’s manifest/`Cargo.toml`, and link the GitHub Release tag.
+When cutting a release, add a dated section, bump the version in the component manifest or `Cargo.toml`, and publish a GitHub release.

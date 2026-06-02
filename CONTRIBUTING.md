@@ -4,7 +4,13 @@ Thanks for taking the time to contribute. CPOS is open source (MIT) — bug repo
 
 For security issues, see [SECURITY.md](SECURITY.md) — do not open public issues for vulnerabilities.
 
-For how the pieces fit together, see [ARCHITECTURE.md](ARCHITECTURE.md). Release history is in [CHANGELOG.md](CHANGELOG.md).
+For how the pieces fit together, see [ARCHITECTURE.md](ARCHITECTURE.md). Release history and current versions are in [CHANGELOG.md](CHANGELOG.md).
+
+| Component | Current version |
+| --- | --- |
+| Terminal app | 0.1.0 (`Cargo.toml`) |
+| VS Code extension | 0.3.13 (`extensions/vscode/package.json`) |
+| Browser companion | 0.6.6 (`extensions/chrome/manifest.json`) |
 
 ## Ways to help
 

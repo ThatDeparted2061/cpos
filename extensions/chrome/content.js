@@ -483,7 +483,7 @@
     return getSourceCode().trim().length > 0 || !!textarea?.value?.trim();
   }
 
-  /** CPH-style quiet fill: source → language → problem, no change events. */
+  /** Quiet form fill without change events (used only if background injection is unavailable). */
   function cfFillQuiet(pending) {
     const textarea = findSourceTextarea();
     const lang = findLangSelect();
