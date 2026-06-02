@@ -7,6 +7,7 @@ const ENDPOINTS = [
 ];
 
 const CF_LANGUAGE_IDS = {
+  // Legacy fallbacks only — Codeforces reuses/changes ids; label matching is preferred.
   cpp: 54,
   c: 43,
   python: 31,
@@ -139,19 +140,19 @@ async function cposSubmitOnPage(code, languageId, languageKey, problemIndex, sub
 
   function pickLanguage(select) {
     if (!select || select.options.length <= 1) return;
-    if (languageId != null) {
-      const want = String(languageId);
+    const ranks = LANG_RANK[languageKey] || [];
+    for (const re of ranks) {
       for (const opt of select.options) {
-        if (opt.value === want) {
+        if (re.test(opt.textContent || "")) {
           select.value = opt.value;
           return;
         }
       }
     }
-    const ranks = LANG_RANK[languageKey] || [];
-    for (const re of ranks) {
+    if (languageId != null) {
+      const want = String(languageId);
       for (const opt of select.options) {
-        if (re.test(opt.textContent || "")) {
+        if (opt.value === want) {
           select.value = opt.value;
           return;
         }

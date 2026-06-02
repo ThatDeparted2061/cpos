@@ -6,7 +6,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | --- | --- | --- |
 | Terminal app | 0.1.0 | `Cargo.toml` |
 | VS Code extension | 0.3.20 | `extensions/vscode/package.json` |
-| Browser companion | 0.6.11 | `extensions/chrome/manifest.json` |
+| Browser companion | 0.6.12 | `extensions/chrome/manifest.json` |
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -48,6 +48,11 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Styled header buttons (GitHub black, Search blue tint, theme accent)
 
 ---
+
+## Browser companion — 0.6.12
+
+### Fixed
+- Codeforces submit language now picks the **newest matching compiler** (e.g. C++23 before C++17) by reading dropdown labels instead of relying on a stale `programTypeId` fallback
 
 ## Browser companion — 0.6.11
 

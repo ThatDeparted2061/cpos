@@ -290,6 +290,7 @@
   }
 
   const CF_LANGUAGE_IDS = {
+    // Legacy fallbacks only — Codeforces reuses/changes ids; label matching is preferred.
     cpp: 54,
     c: 43,
     python: 31,
@@ -440,36 +441,42 @@
     return false;
   }
 
+  const CF_LANG_RANK = {
+    cpp: [/GNU G\+\+23/i, /GNU G\+\+20/i, /GNU G\+\+17/i, /G\+\+23/i, /G\+\+20/i, /G\+\+17/i, /G\+\+/i],
+    c: [/GNU GCC C11/i, /GNU GCC C\b/i, /\bGNU C\b/i],
+    python: [/^Python 3/i, /Python 3\.\d/i, /\bPython 3\b/i, /PyPy 3/i],
+    pypy: [/PyPy 3/i, /PyPy/i],
+    java: [/Java 21/i, /Java 17/i, /Java 11/i, /\bJava\b/i],
+    kotlin: [/Kotlin/i],
+    rust: [/Rust 1\.\d/i, /Rust/i],
+    go: [/\bGo\b/i],
+    csharp: [/\.NET[^#]*C#/i, /Mono C#/i, /C#/i],
+    javascript: [/Node\.js/i, /JavaScript/i],
+    ruby: [/Ruby/i],
+    haskell: [/Haskell/i],
+    pascal: [/PascalABC/i, /Free Pascal/i, /Delphi/i]
+  };
+
   function pickLanguage(select, lang, fireChange = false) {
-    if (!select || !lang) return false;
+    if (!select || !lang || select.options.length <= 1) return false;
+
+    const ranks = CF_LANG_RANK[lang] || [];
+    for (const re of ranks) {
+      for (const opt of select.options) {
+        if (re.test(opt.textContent || "")) {
+          if (select.value !== opt.value) select.value = opt.value;
+          if (fireChange) select.dispatchEvent(new Event("change", { bubbles: true }));
+          return true;
+        }
+      }
+    }
+
     const id = CF_LANGUAGE_IDS[lang];
     if (id != null) {
       if (String(select.value) === String(id)) return true;
       if (setSelect(select, id, fireChange)) return true;
     }
-    const hints = {
-      cpp: ["G++17", "GNU G++"],
-      python: ["Python 3", "PyPy 3"],
-      java: ["Java 11", "Java"],
-      c: ["GNU C"],
-      rust: ["Rust"],
-      go: ["Go"],
-      kotlin: ["Kotlin"],
-      javascript: ["Node.js", "JavaScript"],
-      ruby: ["Ruby"],
-      haskell: ["Haskell"],
-      pascal: ["Delphi", "Pascal"],
-      csharp: ["C#", "Mono C#"]
-    };
-    const needles = hints[lang] || [];
-    for (const opt of select.options) {
-      const text = opt.textContent || "";
-      if (needles.some((n) => text.includes(n))) {
-        if (select.value !== opt.value) select.value = opt.value;
-        if (fireChange) select.dispatchEvent(new Event("change", { bubbles: true }));
-        return true;
-      }
-    }
+
     return false;
   }
 
@@ -547,8 +554,7 @@
 
     textarea.value = pending.code;
 
-    const langId = CF_LANGUAGE_IDS[pending.language];
-    if (langId != null) setSelect(lang, langId, false);
+    pickLanguage(lang, pending.language, false);
 
     setProblemField(pending, false);
 
@@ -615,6 +621,9 @@
     const langSelect = findLangSelect();
     const codeInput = findProblemCodeInput();
     const problemSelect = findProblemIndexSelect();
+    if (langSelect && pending.language) {
+      pickLanguage(langSelect, pending.language, false);
+    }
     const programTypeId =
       (langSelect && langSelect.value) ||
       (pending.language && CF_LANGUAGE_IDS[pending.language] != null

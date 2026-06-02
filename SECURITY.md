@@ -6,7 +6,7 @@
 | --- | --- | --- | --- |
 | Terminal app | 0.1.0 | `Cargo.toml` | Latest on `main` |
 | VS Code extension | 0.3.20 | `extensions/vscode/package.json` | Latest on `main` and VS Code Marketplace |
-| Browser companion | 0.6.11 | `extensions/chrome/manifest.json` | Latest on `main` and Chrome Web Store |
+| Browser companion | 0.6.12 | `extensions/chrome/manifest.json` | Latest on `main` and Chrome Web Store |
 
 Security fixes are applied to `main` first, then released to the VS Code Marketplace and Chrome Web Store as soon as practical.
 
