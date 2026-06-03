@@ -105,12 +105,12 @@ def render(grid, out_path, title):
     # Web-optimized copies for the landing page.
     web_dir = os.path.join(OUT_DIR, "img")
     os.makedirs(web_dir, exist_ok=True)
-    display_w = 1105
+    display_w = 1800
     display_h = int(img.height * display_w / img.width)
     web = img.resize((display_w, display_h), Image.LANCZOS)
     base = os.path.splitext(os.path.basename(out_path))[0]
     if base in {"dashboard", "problems", "contests", "analytics", "recommend"}:
-        web.save(os.path.join(web_dir, f"{base}.webp"), "WEBP", quality=80, method=6)
+        web.save(os.path.join(web_dir, f"{base}.webp"), "WEBP", quality=92, method=6)
         web.save(os.path.join(web_dir, f"{base}.png"), "PNG", optimize=True)
 
 

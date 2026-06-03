@@ -102,11 +102,80 @@ Terminal app capture uses port `27121` — VS Code and TUI can both receive capt
 
 ---
 
-## Terminal app — `cargo install` fails: `link.exe` not found
+## Terminal app — installer fails or `cpos` is not found
+
+The recommended TUI install uses package managers backed by prebuilt GitHub Release binaries:
+
+macOS/Linux with Homebrew:
+
+```bash
+brew tap Soham109/cpos https://github.com/Soham109/cpos
+brew install cpos
+```
+
+Windows with Scoop:
+
+```powershell
+scoop bucket add cpos https://github.com/Soham109/cpos
+scoop install cpos
+```
+
+### Homebrew: tap or install fails
+
+Make sure Homebrew itself is healthy:
+
+```bash
+brew update
+brew doctor
+```
+
+Then retry:
+
+```bash
+brew tap Soham109/cpos https://github.com/Soham109/cpos
+brew install cpos
+```
+
+### Scoop: bucket or install fails
+
+Make sure Scoop itself is healthy:
+
+```powershell
+scoop update
+```
+
+Then retry:
+
+```powershell
+scoop bucket add cpos https://github.com/Soham109/cpos
+scoop install cpos
+```
+
+### Package file or release asset not found
+
+Homebrew and Scoop depend on the generated `Formula/cpos.rb`, `bucket/cpos.json`, and GitHub Release assets. Cut a tagged release first, or use the installer fallback while developing:
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Soham109/cpos/main/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/Soham109/cpos/main/install.ps1 | iex
+```
+
+See [INSTALL.md](INSTALL.md) for the release and publishing flow.
+
+---
+
+## Terminal app — source install fails: `link.exe` not found
 
 **What it means:** Rust on Windows is using the **MSVC** toolchain but **Visual C++ build tools** are not installed. VS Code does **not** include the linker.
 
-This is a Rust/Windows setup issue, not a CPOS bug.
+This only applies when building CPOS from source with `cargo install`. The prebuilt installer above avoids this Rust/Windows setup issue.
 
 ### Fix A — MSVC (recommended on Windows)
 
@@ -180,5 +249,5 @@ Update to **0.3.20+** or reinstall from the latest VSIX/Marketplace build.
 
 1. Note your versions (extension, Chrome companion, terminal app if used).
 2. Copy the **full error** from **Output → CPOS** or your terminal.
-3. Say which step failed: capture, Run All, submit, or `cargo install`.
+3. Say which step failed: TUI install, capture, Run All, submit, or source install.
 4. [Open an issue](https://github.com/Soham109/cpos/issues) or ask in your community with that info.

@@ -32,8 +32,8 @@
     const img = document.createElement("img");
     img.src = `img/${id}.png`;
     img.alt = labels[id] || id;
-    img.width = 1105;
-    img.height = 716;
+    img.width = 1800;
+    img.height = 1166;
     img.decoding = "async";
     if (id === "dashboard") img.fetchPriority = "high";
 

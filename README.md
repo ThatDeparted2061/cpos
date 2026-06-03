@@ -76,7 +76,16 @@ Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemNa
 Browse the catalog, sync rating, track contests, and get recommendations — without opening Codeforces in a tab.
 
 ```bash
-cargo install --git https://github.com/Soham109/cpos
+brew tap Soham109/cpos https://github.com/Soham109/cpos
+brew install cpos
+cpos
+```
+
+Windows with Scoop:
+
+```powershell
+scoop bucket add cpos https://github.com/Soham109/cpos
+scoop install cpos
 cpos
 ```
 
@@ -112,19 +121,28 @@ Configure the VS Code save location under **Settings → Extensions → CPOS** (
 | --- | --- |
 | Browser companion | [Chrome Web Store](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) (Chrome, Edge, Brave) |
 | VS Code extension | [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode) |
-| Terminal app | `cargo install --git https://github.com/Soham109/cpos` |
+| Terminal app | macOS/Linux: `brew tap Soham109/cpos https://github.com/Soham109/cpos` then `brew install cpos` |
+| Terminal app | Windows: `scoop bucket add cpos https://github.com/Soham109/cpos` then `scoop install cpos` |
 
 Install all three for the full experience. The browser companion is required for capture and submit.
 
+The package-manager installs use prebuilt binaries from GitHub Releases, so users do not need Rust, Cargo, Visual Studio Build Tools, or a linker. Developers can still build from source with:
+
+```bash
+cargo install --git https://github.com/Soham109/cpos
+```
+
+See [INSTALL.md](INSTALL.md) for release assets, manual downloads, and publishing notes.
+
 ## Updating
 
-The terminal app does **not** auto-update. Run:
+The terminal app does **not** auto-update in the background. Run:
 
 ```bash
 cpos update
 ```
 
-That pulls the latest version and reinstalls. Your config and problem data are kept.
+For Homebrew installs, CPOS delegates to Homebrew. For Scoop installs, CPOS delegates to Scoop. Your config, cache, templates, and problem data are kept.
 
 **VS Code extension** — updates from the Marketplace automatically (or **Extensions → CPOS → Update**).
 
@@ -216,7 +234,7 @@ codeforces = "your_handle"
 
 > **macOS C++:** run `brew install gcc` if you need `bits/stdc++.h` — CPOS auto-detects Homebrew's g++.
 
-Having issues? See **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** (Run All errors, submit, Windows `cargo install`, and more).
+Having issues? See **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** (TUI install, Run All errors, submit, source builds, and more).
 
 ---
 
@@ -242,7 +260,8 @@ Contributions are welcome and appreciated — whether that's a bug report, a doc
 
 | Doc | Purpose |
 | --- | --- |
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common fixes (Run All, submit, Windows build) |
+| [INSTALL.md](INSTALL.md) | TUI binary install, update, and release publishing |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common fixes (TUI install, Run All, submit, source builds) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How the components connect |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |

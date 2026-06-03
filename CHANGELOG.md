@@ -19,14 +19,18 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Community documentation: `CONTRIBUTING.md`, `SECURITY.md`, `ARCHITECTURE.md`
 - GitHub Actions CI (`cargo test`, VS Code extension compile)
+- GitHub Release workflow for prebuilt terminal app binaries on macOS, Linux, and Windows
+- `install.sh`, `install.ps1`, and [INSTALL.md](INSTALL.md) for binary TUI installs and release publishing
+- Generated Homebrew formula and Scoop manifest publishing from release assets
 - Issue and pull request templates
 - Terminal app: `plain` theme (neutral grayscale palette)
 - Terminal app: `light` theme (bright canvas for light terminal / VS Code light-theme users)
 
 ### Changed
-- Landing page redesign with optimized WebP screenshots
+- `cpos update` now delegates to Homebrew/Scoop when CPOS was installed through a package manager
+- Landing page redesign with higher-resolution WebP screenshots and package-manager-first TUI install commands
 - Full demo video embedded on the [website](https://cpos.sohamaggarwal.com) and linked from README files
-- Added [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for Run All, submit, capture, and Windows `cargo install` issues
+- Added [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for TUI install, Run All, submit, capture, and source-build issues
 
 ---
 
