@@ -1,25 +1,25 @@
 class Cpos < Formula
   desc "Competitive Programming Operating System terminal app"
   homepage "https://github.com/Soham109/cpos"
-  version "scode-v0.3.21"
+  version "0.1.2"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/Soham109/cpos/releases/download/vscode-v0.3.21/cpos-aarch64-apple-darwin.tar.gz"
-      sha256 "aa9db6a5670b92d9c99653702821cfdad349435ac589addaffd87f6cb5e5dad4"
+      url "https://github.com/Soham109/cpos/releases/download/v0.1.2/cpos-aarch64-apple-darwin.tar.gz"
+      sha256 "68fd98c2994c43036b60209eef81ecdfd945a734709b8e4b9597ece35e9e48df"
     end
 
     on_intel do
-      url "https://github.com/Soham109/cpos/releases/download/vscode-v0.3.21/cpos-x86_64-apple-darwin.tar.gz"
-      sha256 "ef610c8b33f3a1088e58441b8c91621dd8f90647aa88a12c1273261f6e812343"
+      url "https://github.com/Soham109/cpos/releases/download/v0.1.2/cpos-x86_64-apple-darwin.tar.gz"
+      sha256 "9cc6d8ff162522aa6f7e63b9b4111c55dc1a049e2460557fcf6bb02c99d2cd71"
     end
   end
 
   on_linux do
     on_intel do
-      url "https://github.com/Soham109/cpos/releases/download/vscode-v0.3.21/cpos-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "e55a315cca44d18e6b955777758bff643db14d7aaf43e20deebe03096269b996"
+      url "https://github.com/Soham109/cpos/releases/download/v0.1.2/cpos-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "ea94f47598d81e97777f310f30aed263a01ee398bce7227bc8823db4337f1f06"
     end
   end
 
@@ -28,6 +28,6 @@ class Cpos < Formula
   end
 
   test do
-    assert_match "CPOS vscode-v0.3.21", shell_output("#{bin}/cpos help 2>&1")
+    assert_match "CPOS v0.1.2", shell_output("#{bin}/cpos help 2>&1")
   end
 end

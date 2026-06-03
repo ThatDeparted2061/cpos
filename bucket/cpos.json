@@ -1,12 +1,12 @@
 {
-  "version": "scode-v0.3.21",
+  "version": "0.1.2",
   "description": "Competitive Programming Operating System terminal app",
   "homepage": "https://github.com/Soham109/cpos",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/Soham109/cpos/releases/download/vscode-v0.3.21/cpos-x86_64-pc-windows-msvc.zip",
-      "hash": "c82e6a8bd749d7a8941c63287af46f4f8cc5af92624cbb162595b9d3230cdc3f"
+      "url": "https://github.com/Soham109/cpos/releases/download/v0.1.2/cpos-x86_64-pc-windows-msvc.zip",
+      "hash": "513ce8dd053c147c8411531ddf16adf02e3a9343cc0c39121851a680c6443de6"
     }
   },
   "bin": "cpos.exe",
