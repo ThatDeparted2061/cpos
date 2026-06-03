@@ -20,6 +20,9 @@
   --accent-2: #86efac;
   --accent-3: #fbbf24;
   --danger: #fb7185;
+  --btn-bg: #0c7bb8;
+  --btn-bg-hover: #1094dc;
+  --on-accent: #ffffff;
   --shadow: rgba(0, 0, 0, 0.42);
   --font: "Inter", system-ui, sans-serif;
   --display: "Instrument Sans", var(--font);
@@ -49,6 +52,9 @@
   --accent-2: #059669;
   --accent-3: #b45309;
   --danger: #e11d48;
+  --btn-bg: #0284c7;
+  --btn-bg-hover: #0369a1;
+  --on-accent: #ffffff;
   --shadow: rgba(15, 23, 42, 0.14);
 }
 
@@ -209,13 +215,13 @@ code {
 }
 
 .nav-cta {
-  color: #061011;
-  background: var(--accent);
+  color: var(--on-accent);
+  background: var(--btn-bg);
   border: 1px solid rgba(125, 211, 252, 0.42);
 }
 
 .nav-cta:hover {
-  background: #a5e3ff;
+  background: var(--btn-bg-hover);
 }
 
 .theme-toggle {
@@ -266,7 +272,7 @@ code {
   font-family: var(--mono);
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--accent-2);
+  color: var(--accent);
   letter-spacing: 0;
   text-transform: uppercase;
   margin-bottom: 14px;
@@ -337,13 +343,13 @@ code {
 }
 
 .btn-primary {
-  color: #061011;
-  background: var(--accent);
+  color: var(--on-accent);
+  background: var(--btn-bg);
   border-color: rgba(125, 211, 252, 0.5);
 }
 
 .btn-primary:hover {
-  background: #a5e3ff;
+  background: var(--btn-bg-hover);
 }
 
 .btn-secondary {
@@ -353,7 +359,7 @@ code {
 }
 
 .btn-secondary:hover {
-  border-color: var(--accent-2);
+  border-color: var(--accent);
 }
 
 /* Hero */
@@ -448,7 +454,8 @@ code {
 }
 
 .btn-copy:hover {
-  background: var(--accent-2);
+  background: var(--btn-bg);
+  color: var(--on-accent);
 }
 
 .hero-stats {
@@ -511,7 +518,7 @@ code {
 }
 
 .window-bar span:nth-child(3) {
-  background: var(--accent-2);
+  background: var(--accent);
 }
 
 .window-bar strong {
@@ -565,9 +572,9 @@ code {
 }
 
 .tab.active {
-  color: #061011;
+  color: var(--on-accent);
   border-color: rgba(125, 211, 252, 0.45);
-  background: var(--accent);
+  background: var(--btn-bg);
 }
 
 .tab-caption {
@@ -697,7 +704,7 @@ code {
 .component-card svg {
   width: 22px;
   height: 22px;
-  color: var(--accent-2);
+  color: var(--accent);
   margin-bottom: 16px;
 }
 
@@ -829,7 +836,7 @@ code {
 }
 
 .install-link:hover {
-  border-color: var(--accent-2);
+  border-color: var(--accent);
 }
 
 /* Footer */
@@ -858,7 +865,7 @@ code {
 .foot-lock {
   width: 18px;
   height: 18px;
-  color: var(--accent-2);
+  color: var(--accent);
   flex-shrink: 0;
 }
 
