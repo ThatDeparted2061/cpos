@@ -4,7 +4,7 @@
     problems: "Browse the full catalog — search, filter, open. No Codeforces tab needed.",
     contests: "Upcoming and live Codeforces contests with countdowns.",
     analytics: "Rating graph, topic breakdown, and activity heatmap.",
-    recommend: "30 unsolved problems picked for your weak tags.",
+    recommend: "Unsolved problems picked around your rating and weak tags.",
   };
 
   const labels = {
@@ -79,6 +79,39 @@
   if ("requestIdleCallback" in window) {
     requestIdleCallback(() => injectScreen(document.getElementById("screen-problems")));
   }
+
+  const heroSlides = Array.from(document.querySelectorAll(".hero-slide"));
+  const heroDots = Array.from(document.querySelectorAll("[data-hero-slide]"));
+  const heroTitle = document.getElementById("hero-shot-title");
+  let heroIndex = 0;
+  let heroTimer = null;
+
+  function showHeroSlide(index) {
+    if (!heroSlides.length) return;
+    heroIndex = (index + heroSlides.length) % heroSlides.length;
+    heroSlides.forEach((slide, i) => {
+      const active = i === heroIndex;
+      slide.classList.toggle("active", active);
+      if (active && heroTitle) heroTitle.textContent = slide.dataset.title || "cpos";
+    });
+    heroDots.forEach((dot, i) => dot.classList.toggle("active", i === heroIndex));
+  }
+
+  function startHeroCarousel() {
+    if (heroSlides.length < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    heroTimer = window.setInterval(() => showHeroSlide(heroIndex + 1), 4200);
+  }
+
+  heroDots.forEach((dot) => {
+    dot.addEventListener("click", () => {
+      if (heroTimer) window.clearInterval(heroTimer);
+      showHeroSlide(Number(dot.dataset.heroSlide || 0));
+      startHeroCarousel();
+    });
+  });
+
+  showHeroSlide(0);
+  startHeroCarousel();
 
   const themeToggle = document.querySelector(".theme-toggle");
   const themeMeta = document.querySelector('meta[name="theme-color"]');

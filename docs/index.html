@@ -71,46 +71,43 @@
           <p class="eyebrow">Competitive Programming Operating System</p>
           <h1>CPOS</h1>
           <p class="hero-lead">
-            A local-first toolchain for competitive programming: terminal catalog,
-            browser capture, VS Code testing, and judge submit autofill. Fast setup,
-            no Rust install required for the TUI.
+            One local-first workflow for Codeforces and CSES: capture samples from
+            your browser, solve inside VS Code, run tests instantly, and use the TUI
+            when you want a fast competitive programming cockpit.
           </p>
           <div class="hero-actions">
             <a href="#install" class="btn btn-primary">
               <svg aria-hidden="true"><use href="#i-download"/></svg>
-              Install TUI
+              Install CPOS
             </a>
             <a href="https://github.com/Soham109/cpos" target="_blank" rel="noopener" class="btn btn-secondary">
               <svg aria-hidden="true"><use href="#i-github"/></svg>
               View repo
             </a>
           </div>
-          <div class="command-card" aria-label="macOS and Linux install command">
-            <div class="command-meta">
-              <span>Homebrew</span>
-              <span>package-manager install</span>
-            </div>
-            <div class="copy-row">
-              <code>brew tap Soham109/cpos https://github.com/Soham109/cpos && brew install cpos</code>
-              <button class="btn-copy" data-copy="brew tap Soham109/cpos https://github.com/Soham109/cpos && brew install cpos">Copy</button>
-            </div>
-          </div>
-          <dl class="hero-stats" aria-label="CPOS facts">
-            <div><dt>13</dt><dd>languages</dd></div>
-            <div><dt>30</dt><dd>practice picks</dd></div>
-            <div><dt>127.0.0.1</dt><dd>local sync</dd></div>
-          </dl>
         </div>
 
-        <figure class="hero-shot" aria-label="CPOS terminal dashboard preview">
+        <figure class="hero-shot hero-carousel" aria-label="CPOS product previews">
           <div class="window-bar">
             <span></span><span></span><span></span>
-            <strong>cpos</strong>
+            <strong id="hero-shot-title">terminal-dashboard</strong>
           </div>
-          <picture>
-            <source srcset="img/dashboard.webp" type="image/webp">
-            <img src="img/dashboard.png" width="1800" height="1166" alt="CPOS terminal dashboard showing rating, streak, recommendations, and progress" fetchpriority="high" decoding="async">
-          </picture>
+          <div class="hero-slide active" data-title="terminal-dashboard">
+            <picture>
+              <source srcset="img/dashboard.webp" type="image/webp">
+              <img src="img/dashboard.png" width="1800" height="1166" alt="CPOS terminal dashboard showing rating, streak, recommendations, and progress" fetchpriority="high" decoding="async">
+            </picture>
+          </div>
+          <div class="hero-slide" data-title="vscode-panel">
+            <picture>
+              <source srcset="img/vscode-panel-ui.webp" type="image/webp">
+              <img src="img/vscode-panel-ui.png" width="1024" height="570" alt="CPOS VS Code extension running samples beside a solution file" loading="lazy" decoding="async">
+            </picture>
+          </div>
+          <figcaption class="carousel-dots" aria-label="Product preview carousel">
+            <button type="button" class="active" data-hero-slide="0" aria-label="Show terminal dashboard"></button>
+            <button type="button" data-hero-slide="1" aria-label="Show VS Code panel"></button>
+          </figcaption>
         </figure>
       </div>
     </section>
@@ -142,30 +139,63 @@
       </div>
     </section>
 
-    <section class="workflow">
-      <div class="wrap">
-        <ol class="steps">
-          <li>
-            <span class="step-n">01</span>
-            <svg class="step-ico"><use href="#i-sync"/></svg>
-            <div><strong>Sync</strong><span>Pull catalog, solves, contests, and rating history.</span></div>
-          </li>
-          <li>
-            <span class="step-n">02</span>
-            <svg class="step-ico"><use href="#i-search"/></svg>
-            <div><strong>Choose</strong><span>Search, filter, or open a recommendation.</span></div>
-          </li>
-          <li>
-            <span class="step-n">03</span>
-            <svg class="step-ico"><use href="#i-folder"/></svg>
-            <div><strong>Create</strong><span>CPOS writes the solution file and stores samples.</span></div>
-          </li>
-          <li>
-            <span class="step-n">04</span>
-            <svg class="step-ico"><use href="#i-play"/></svg>
-            <div><strong>Solve</strong><span>Run samples, then submit through the browser companion.</span></div>
-          </li>
-        </ol>
+    <section class="testimonials" aria-label="Community reactions">
+      <div class="wrap testimonial-head">
+        <p class="eyebrow">Social proof</p>
+        <h2>Early reactions from people trying CPOS.</h2>
+      </div>
+      <div class="testimonial-marquee" aria-label="Anonymized comments">
+        <div class="testimonial-track">
+          <article class="testimonial-card">
+            <span>Reddit</span>
+            <p>Looks cool ngl. Will surely try.</p>
+          </article>
+          <article class="testimonial-card">
+            <span>Reddit</span>
+            <p>Amazing build. I was trying to make something like this, and I would contribute if needed.</p>
+          </article>
+          <article class="testimonial-card">
+            <span>Reddit</span>
+            <p>This looks so cool. Please add other CP/DSA platforms as well.</p>
+          </article>
+          <article class="testimonial-card">
+            <span>Group chat</span>
+            <p>It's really cool. I'm going to share it with my friends.</p>
+          </article>
+          <article class="testimonial-card">
+            <span>Discord</span>
+            <p>This is goated. How long did you spend working on it?</p>
+          </article>
+          <article class="testimonial-card">
+            <span>Reddit</span>
+            <p>Ngl this looks great. The idea and workflow are genuinely useful.</p>
+          </article>
+
+          <article class="testimonial-card" aria-hidden="true">
+            <span>Reddit</span>
+            <p>Looks cool ngl. Will surely try.</p>
+          </article>
+          <article class="testimonial-card" aria-hidden="true">
+            <span>Reddit</span>
+            <p>Amazing build. I was trying to make something like this, and I would contribute if needed.</p>
+          </article>
+          <article class="testimonial-card" aria-hidden="true">
+            <span>Reddit</span>
+            <p>This looks so cool. Please add other CP/DSA platforms as well.</p>
+          </article>
+          <article class="testimonial-card" aria-hidden="true">
+            <span>Group chat</span>
+            <p>It's really cool. I'm going to share it with my friends.</p>
+          </article>
+          <article class="testimonial-card" aria-hidden="true">
+            <span>Discord</span>
+            <p>This is goated. How long did you spend working on it?</p>
+          </article>
+          <article class="testimonial-card" aria-hidden="true">
+            <span>Reddit</span>
+            <p>Ngl this looks great. The idea and workflow are genuinely useful.</p>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -254,7 +284,7 @@
         </div>
 
         <div class="install-grid">
-          <article class="install-panel install-panel-primary">
+          <article class="install-panel">
             <div class="install-label">
               <svg class="install-ico"><use href="#i-terminal"/></svg>
               <div>

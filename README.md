@@ -162,9 +162,9 @@ For Homebrew installs, CPOS delegates to Homebrew. For Scoop installs, CPOS dele
 - **Auto file creation** — open a problem, get a ready-to-edit solution file in your folder
 - **Sample capture** — public tests pulled from the problem page, with multi-case grouping on Codeforces when available
 - **Run & submit** — from the VS Code panel or terminal keys; submit autofills your browser
-- **13 languages** — C, C++, Python, PyPy, Java, Kotlin, Rust, Go, C#, JS, Ruby, Haskell, Pascal
+- **Multi-language templates** — start new solutions in your configured language
 - **Progress & analytics** — rating history, topic breakdown, activity heatmap
-- **Recommendations** — up to 30 personalized problems aimed at your weak topics (see below)
+- **Recommendations** — personalized unsolved problems aimed at your weak topics (see below)
 - **Contests** — upcoming and running Codeforces contests with countdowns
 - **Private** — everything stays on your machine (`127.0.0.1`, no external servers)
 
@@ -172,7 +172,7 @@ For Homebrew installs, CPOS delegates to Homebrew. For Scoop installs, CPOS dele
 
 ## Recommendations
 
-After you sync (`r` in the terminal), CPOS builds a list of **30 unsolved problems** to practice next. Find them on the **Recommend** tab or the **Recommended Next** panel on the Dashboard.
+After you sync (`r` in the terminal), CPOS builds a focused list of unsolved problems to practice next. Find them on the **Recommend** tab or the **Recommended Next** panel on the Dashboard.
 
 ### How problems are picked
 
