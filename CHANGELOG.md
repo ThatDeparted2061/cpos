@@ -4,7 +4,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 
 | Component | Current version | Version file |
 | --- | --- | --- |
-| Terminal app | 0.1.1 | `Cargo.toml` |
+| Terminal app | 0.1.2 | `Cargo.toml` |
 | VS Code extension | 0.3.21 | `extensions/vscode/package.json` |
 | Browser companion | 0.6.12 | `extensions/chrome/manifest.json` |
 
@@ -34,7 +34,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## Terminal app — 0.1.1
+## Terminal app — 0.1.2
 
 ### Fixed
 - `cpos update` now detects Homebrew/Scoop installs through package-manager symlinks and shims before falling back to standalone binary updates.

@@ -75,7 +75,7 @@ fn detect_method() -> Result<UpdateMethod> {
 fn installed_by_homebrew() -> bool {
     current_exe_paths()
         .iter()
-        .any(|p| path_text(p).contains("/Cellar/cpos/"))
+        .any(|p| path_text(p).contains("/cellar/cpos/"))
 }
 
 fn installed_by_scoop() -> bool {
