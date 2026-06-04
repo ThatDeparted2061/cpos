@@ -181,7 +181,7 @@ code {
 
 .nav-link,
 .nav-cta,
-.nav-version {
+.nav-stat {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -196,27 +196,54 @@ code {
 }
 
 .nav-link:hover,
-.nav-version:hover {
+.nav-stat:hover {
   color: var(--text);
   background: var(--hover);
 }
 
-.nav-version {
-  gap: 6px;
-  color: var(--text);
-  border: 1px solid var(--line);
-  background: var(--soft-fill);
+.nav-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 4px;
+  padding: 0 6px;
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
 }
 
-.nav-version span {
-  color: var(--dim);
-  font-size: 0.7rem;
+.nav-stat {
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 9px;
   font-family: var(--mono);
-  text-transform: uppercase;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text);
 }
 
-.nav-version strong {
-  font-size: 0.8rem;
+.nav-stat-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.nav-stat:hover .nav-stat-icon {
+  opacity: 1;
+}
+
+.nav-stat-star {
+  color: #facc15;
+  opacity: 1;
+}
+
+:root[data-theme="light"] .nav-stat-star {
+  color: #ca8a04;
+}
+
+.nav-stat-reddit .nav-stat-icon {
+  color: #ff4500;
+  opacity: 1;
 }
 
 .nav-github svg {
@@ -475,50 +502,6 @@ code {
 .btn-copy:hover {
   border-color: var(--btn-bg-hover);
   opacity: 0.92;
-}
-
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 22px;
-}
-
-.stat-card {
-  display: block;
-  min-height: 92px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft-fill);
-  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
-}
-
-.stat-card:hover {
-  border-color: var(--line-strong);
-  background: var(--surface);
-  transform: translateY(-1px);
-}
-
-.stat-value {
-  display: block;
-  font-family: var(--display);
-  font-size: 1.35rem;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.stat-label,
-.stat-note {
-  display: block;
-  color: var(--dim);
-  font-size: 0.75rem;
-  margin-top: 5px;
-}
-
-.stat-note {
-  color: var(--muted);
-  font-weight: 700;
 }
 
 .hero-shot,
@@ -1028,7 +1011,7 @@ code {
   }
 
   .nav-github,
-  .nav-version,
+  .nav-stats,
   .nav-cta {
     display: inline-flex;
   }
@@ -1089,7 +1072,22 @@ code {
     margin-left: 0;
   }
 
-  .hero-stats,
+  .nav-stats {
+    margin: 0;
+    padding: 0 2px;
+    border-left: none;
+    border-right: none;
+  }
+
+  .nav-stat {
+    min-width: 34px;
+    padding: 0 7px;
+  }
+
+  .nav-stat span {
+    display: none;
+  }
+
   .component-grid,
   .install-grid {
     grid-template-columns: minmax(0, 1fr);

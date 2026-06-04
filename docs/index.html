@@ -41,6 +41,9 @@
     <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 7 7 0 1 0 20.5 14.5Z"/></symbol>
     <symbol id="i-github" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.42-4.04-1.42-.55-1.38-1.34-1.75-1.34-1.75-1.09-.74.08-.73.08-.73 1.2.09 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.66-.3-5.46-1.33-5.46-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.4 11.4 0 0 1 6 0c2.29-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.83.58A12 12 0 0 0 12 .5Z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 15.9l-5.1 2.68.97-5.68-4.12-4.02 5.7-.83L12 2.5z"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12V4h8l8 8-8 8-8-8z"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-reddit" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.03 4.87-6.77 4.87-3.74 0-6.77-2.176-6.77-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.25 0-.688-.561-1.249-1.25-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.25 0-.688-.561-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></symbol>
   </svg>
 
   <header class="top">
@@ -52,10 +55,24 @@
       <a href="#product" class="nav-link">Product</a>
       <a href="#demo" class="nav-link">Demo</a>
       <a href="https://github.com/Soham109/cpos/blob/main/INSTALL.md" target="_blank" rel="noopener" class="nav-link">Docs</a>
-      <a href="https://github.com/Soham109/cpos/releases/latest" target="_blank" rel="noopener" class="nav-version" aria-label="Latest CPOS release">
-        <span>Latest</span>
-        <strong data-live-stat="release">v0.1.3</strong>
-      </a>
+      <div class="nav-stats" role="group" aria-label="Live stats">
+        <a href="https://github.com/Soham109/cpos/releases/latest" target="_blank" rel="noopener" class="nav-stat" title="Latest TUI release">
+          <svg class="nav-stat-icon" aria-hidden="true"><use href="#i-tag"/></svg>
+          <span data-live-stat="release">v0.1.3</span>
+        </a>
+        <a href="https://github.com/Soham109/cpos" target="_blank" rel="noopener" class="nav-stat nav-stat-stars" title="GitHub stars">
+          <svg class="nav-stat-icon nav-stat-star" aria-hidden="true"><use href="#i-star"/></svg>
+          <span data-live-stat="github-stars">26</span>
+        </a>
+        <a href="https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode" target="_blank" rel="noopener" class="nav-stat" title="VS Code extension downloads">
+          <svg class="nav-stat-icon" aria-hidden="true"><use href="#i-download"/></svg>
+          <span data-live-stat="vscode-downloads">100+</span>
+        </a>
+        <a href="https://www.reddit.com/r/codeforces/comments/1tvjxub/i_built_a_better_cph/" target="_blank" rel="noopener noreferrer" class="nav-stat nav-stat-reddit" title="Reddit launch thread">
+          <svg class="nav-stat-icon" aria-hidden="true"><use href="#i-reddit"/></svg>
+          <span data-live-stat="reddit-nav">20k+</span>
+        </a>
+      </div>
       <a href="https://github.com/Soham109/cpos" target="_blank" rel="noopener" class="nav-link nav-github">
         <svg aria-hidden="true"><use href="#i-github"/></svg>
         GitHub
@@ -87,25 +104,6 @@
             <a href="https://github.com/Soham109/cpos" target="_blank" rel="noopener" class="btn btn-secondary">
               <svg aria-hidden="true"><use href="#i-github"/></svg>
               View repo
-            </a>
-          </div>
-          <div class="hero-stats" aria-label="Live CPOS stats">
-            <a class="stat-card" href="https://github.com/Soham109/cpos/releases/latest" target="_blank" rel="noopener">
-              <strong class="stat-value" data-live-stat="release">v0.1.3</strong>
-              <span class="stat-label">latest TUI release</span>
-            </a>
-            <a class="stat-card" href="https://github.com/Soham109/cpos" target="_blank" rel="noopener">
-              <strong class="stat-value" data-live-stat="github-stars">26</strong>
-              <span class="stat-label">GitHub stars</span>
-            </a>
-            <a class="stat-card" href="https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode" target="_blank" rel="noopener">
-              <strong class="stat-value" data-live-stat="vscode-downloads">100+</strong>
-              <span class="stat-label">VS Code downloads</span>
-            </a>
-            <a class="stat-card" href="https://www.reddit.com/r/codeforces/comments/1tvjxub/i_built_a_better_cph/" target="_blank" rel="noopener noreferrer">
-              <strong class="stat-value">18k+</strong>
-              <span class="stat-label">Reddit views</span>
-              <span class="stat-note" data-live-stat="reddit-upvotes">150+ upvotes</span>
             </a>
           </div>
         </div>
@@ -169,7 +167,7 @@
           <h2>Early reactions from people trying CPOS.</h2>
         </div>
         <a class="reddit-proof" href="https://www.reddit.com/r/codeforces/comments/1tvjxub/i_built_a_better_cph/" target="_blank" rel="noopener noreferrer">
-          <strong data-live-stat="reddit-summary">18k+ views · 150+ upvotes</strong>
+          <strong data-live-stat="reddit-summary">20k+ views · 150+ upvotes</strong>
           <span>top-trending r/codeforces launch</span>
         </a>
       </div>

@@ -146,6 +146,11 @@
     redditPost: "https://www.reddit.com/r/codeforces/comments/1tvjxub/i_built_a_better_cph/.json?raw_json=1",
   };
 
+  const liveFallbacks = {
+    redditViews: 20000,
+    redditUpvotes: 150,
+  };
+
   function setLiveStat(name, value) {
     if (!value) return;
     document.querySelectorAll(`[data-live-stat="${name}"]`).forEach((el) => {
@@ -188,6 +193,8 @@
   }
 
   async function loadLiveStats() {
+    const fallbackViews = `${formatCompact(liveFallbacks.redditViews)}+`;
+
     fetchJson(liveSources.latestRelease)
       .then((release) => setLiveStat("release", release.tag_name || release.name))
       .catch(() => {});
@@ -209,13 +216,19 @@
 
     fetchJson(liveSources.redditPost)
       .then((listing) => {
-        const score = listing?.[0]?.data?.children?.[0]?.data?.score;
-        const upvotes = Math.max(Number(score) || 0, 150);
+        const post = listing?.[0]?.data?.children?.[0]?.data || {};
+        const upvotes = Math.max(Number(post.score) || 0, liveFallbacks.redditUpvotes);
+        const views = Math.max(Number(post.view_count) || 0, liveFallbacks.redditViews);
+        const formattedViews = `${formatCompact(views)}+`;
         const formatted = `${formatCompact(upvotes)}+ upvotes`;
         setLiveStat("reddit-upvotes", formatted);
-        setLiveStat("reddit-summary", `18k+ views · ${formatted}`);
+        setLiveStat("reddit-summary", `${formattedViews} views · ${formatted}`);
+        setLiveStat("reddit-nav", formattedViews);
       })
-      .catch(() => {});
+      .catch(() => {
+        setLiveStat("reddit-nav", fallbackViews);
+        setLiveStat("reddit-summary", `${fallbackViews} views · ${liveFallbacks.redditUpvotes}+ upvotes`);
+      });
   }
 
   loadLiveStats();
