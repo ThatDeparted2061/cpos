@@ -136,13 +136,19 @@ See [INSTALL.md](INSTALL.md) for release assets, manual downloads, and publishin
 
 ## Updating
 
-The terminal app does **not** auto-update in the background. Run:
+When the terminal app starts, CPOS does a quick best-effort update check for the
+terminal app. If the terminal app is outdated, CPOS asks before running an
+update; it never updates silently. If the check is slow or offline, CPOS opens
+normally.
+
+You can also update manually:
 
 ```bash
 cpos update
 ```
 
 For Homebrew installs, CPOS delegates to Homebrew. For Scoop installs, CPOS delegates to Scoop. Your config, cache, templates, and problem data are kept.
+Set `CPOS_NO_UPDATE_CHECK=1` to skip startup checks.
 
 **VS Code extension** — updates from the Marketplace automatically (or **Extensions → CPOS → Update**).
 

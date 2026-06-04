@@ -4,19 +4,21 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 
 | Component | Current version | Version file |
 | --- | --- | --- |
-| Terminal app | 0.1.2 | `Cargo.toml` |
-| VS Code extension | 0.3.21 | `extensions/vscode/package.json` |
-| Browser companion | 0.6.12 | `extensions/chrome/manifest.json` |
+| Terminal app | 0.1.3 | `Cargo.toml` |
+| VS Code extension | 0.3.22 | `extensions/vscode/package.json` |
+| Browser companion | 0.6.13 | `extensions/chrome/manifest.json` |
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Terminal app
-- Opening a problem with **`o`** or Enter now prefers your **active project directory** when VS Code has synced a solution path, a recent session points outside the default `~/cpos` tree, or the shell working directory looks like a project.
-- **Submit** now relies entirely on the browser companion in Chrome instead of opening the system default browser, so submissions always land in the logged-in Chrome session (matching the VS Code flow).
+---
+
+## Terminal app — 0.1.3 - 2026-06-04
 
 ### Added
+- Startup update check for the terminal app. If a newer TUI release is available, CPOS asks before running `cpos update`; slow/offline checks fall through and open normally.
+- CSES progress sync now records newly observed solved/attempted tasks as dated CPOS activity after the first baseline sync.
 - Community documentation: `CONTRIBUTING.md`, `SECURITY.md`, `ARCHITECTURE.md`
 - GitHub Actions CI (`cargo test`, VS Code extension compile)
 - GitHub Release workflow for prebuilt terminal app binaries on macOS, Linux, and Windows
@@ -27,10 +29,29 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Terminal app: `light` theme (bright canvas for light terminal / VS Code light-theme users)
 
 ### Changed
-- `cpos update` now delegates to Homebrew/Scoop when CPOS was installed through a package manager
-- Landing page redesign with higher-resolution WebP screenshots and package-manager-first TUI install commands
-- Full demo video embedded on the [website](https://cpos.sohamaggarwal.com) and linked from README files
-- Added [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for TUI install, Run All, submit, capture, and source-build issues
+- Recommendations now use solved/attempted history to prefer stretch problems above the user's level, keep a larger scrollable pool, and avoid recommending CSES tasks already marked solved by progress sync.
+- Streaks and the Analytics activity heatmap now count known CPOS activity days on the local calendar, across Codeforces plus newly observed CSES progress, instead of accepted-only UTC days.
+- Opening a problem with **`o`** or Enter now prefers your **active project directory** when VS Code has synced a solution path, a recent session points outside the default `~/cpos` tree, or the shell working directory looks like a project.
+- **Submit** now relies entirely on the browser companion in Chrome instead of opening the system default browser, so submissions always land in the logged-in Chrome session (matching the VS Code flow).
+- `cpos update` now delegates to Homebrew/Scoop when CPOS was installed through a package manager.
+- Landing page redesign with higher-resolution WebP screenshots and package-manager-first TUI install commands.
+- Full demo video embedded on the [website](https://cpos.sohamaggarwal.com) and linked from README files.
+- Added [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for TUI install, Run All, submit, capture, and source-build issues.
+
+---
+
+## VS Code extension — 0.3.22 - 2026-06-04
+
+### Changed
+- Compatibility package for the CPOS 0.1.3 / browser companion 0.6.13 release. No VS Code runtime behavior changed.
+
+---
+
+## Browser companion — 0.6.13 - 2026-06-04
+
+### Fixed
+- CSES submit no longer double-submits by racing the content-script fallback against the background submitter.
+- CSES C++ version selection now chooses the highest visible version from the submit page instead of hardcoding C++17.
 
 ---
 

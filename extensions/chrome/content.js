@@ -845,13 +845,13 @@
     );
   }
 
-  function csesOptionHints(lang) {
+  function csesOptionStrategy(lang) {
     // Preferred variant for the second ("option") select.
     return (
       {
-        cpp: ["C++17"],
-        rust: ["2021"],
-        python: ["CPython3", "CPython"]
+        cpp: { version: /(?:C\+\+\s*)?(\d{2})/i, prefer: [/C\+\+/i] },
+        rust: { version: /(\d{4})/i, prefer: [/Rust/i] },
+        python: { prefer: [/CPython3/i, /Python\s*3/i, /CPython/i] }
       }[lang] || []
     );
   }
@@ -884,6 +884,37 @@
     return false;
   }
 
+  function selectBestOption(select, strategy) {
+    if (!select || !strategy) return false;
+    let best = null;
+    let bestScore = -1;
+    for (const opt of select.options) {
+      const text = opt.textContent || "";
+      let score = 0;
+      const version = strategy.version?.exec(text);
+      if (version) score += Number(version[1]) * 100;
+      const prefer = strategy.prefer || [];
+      for (let i = 0; i < prefer.length; i++) {
+        if (prefer[i].test(text)) {
+          score += prefer.length - i;
+          break;
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = opt;
+      }
+    }
+    if (best && bestScore > 0) {
+      if (select.value !== best.value) {
+        select.value = best.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      return true;
+    }
+    return false;
+  }
+
   async function setCsesLanguage(form, lang) {
     const typeSelect =
       form.querySelector('select[name="type"]') || form.querySelector("select");
@@ -893,9 +924,9 @@
       await sleep(250);
     }
     const optionSelect = form.querySelector('select[name="option"]');
-    const optionHints = csesOptionHints(lang);
-    if (optionSelect && optionHints.length) {
-      selectByHints(optionSelect, optionHints, false);
+    const optionStrategy = csesOptionStrategy(lang);
+    if (optionSelect && optionStrategy) {
+      selectBestOption(optionSelect, optionStrategy);
     }
   }
 
@@ -1037,18 +1068,13 @@
   }
 
   async function watchSubmitPage() {
-    // Poll for up to 2 minutes — VS Code/TUI may queue pending after the tab opens.
+    // Let the background worker own CSES submission. The old content-script
+    // fallback could race the injected submitter and send the same form twice.
     try {
       chrome.runtime.sendMessage({ type: "cpos-poll-submit" });
     } catch {
       /* background handles primary path */
     }
-
-    for (let i = 0; i < 120; i++) {
-      if (await autofillSubmit()) return;
-      await sleep(1000);
-    }
-    toast("CPOS · submit timed out — is CPOS running?", false);
   }
 
   async function watchCodeforcesSubmit() {

@@ -25,18 +25,16 @@ fn draw_rating_graph(frame: &mut Frame, app: &App, area: Rect) {
     let block = t.panel("Rating History");
 
     if app.rating_history.is_empty() {
-        let msg = Paragraph::new("  No rating data yet. Set your Codeforces handle in Config, then press 'r'.")
-            .style(Style::default().fg(t.dim))
-            .block(block);
+        let msg = Paragraph::new(
+            "  No rating data yet. Set your Codeforces handle in Config, then press 'r'.",
+        )
+        .style(Style::default().fg(t.dim))
+        .block(block);
         frame.render_widget(msg, area);
         return;
     }
 
-    let ratings: Vec<u32> = app
-        .rating_history
-        .iter()
-        .map(|r| r.new_rating)
-        .collect();
+    let ratings: Vec<u32> = app.rating_history.iter().map(|r| r.new_rating).collect();
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -86,7 +84,8 @@ fn draw_rating_graph(frame: &mut Frame, app: &App, area: Rect) {
 
     for (i, &rating) in ratings.iter().step_by(step).take(slots).enumerate() {
         let norm = ((rating.saturating_sub(min_r)) as f64 / range as f64).clamp(0.0, 1.0);
-        let bar_height = ((norm * plot_h as f64).round() as u16).max(if rating > min_r { 1 } else { 0 });
+        let bar_height =
+            ((norm * plot_h as f64).round() as u16).max(if rating > min_r { 1 } else { 0 });
         let x0 = chart.x + (i as u16 * slot);
         if x0 + bar_w > chart.x + chart.width {
             break;
@@ -98,9 +97,7 @@ fn draw_rating_graph(frame: &mut Frame, app: &App, area: Rect) {
                 break;
             }
             for dx in 0..bar_w {
-                if let Some(cell) =
-                    frame.buffer_mut().cell_mut(Position::new(x0 + dx, y))
-                {
+                if let Some(cell) = frame.buffer_mut().cell_mut(Position::new(x0 + dx, y)) {
                     cell.set_symbol("█").set_fg(color);
                 }
             }
@@ -160,8 +157,7 @@ fn draw_tag_breakdown(frame: &mut Frame, app: &App, area: Rect) {
                     .style(Style::default().fg(t.fg)),
                 Cell::from(format!("{:^8}", format!("{}/{}", s.solved, total)))
                     .style(Style::default().fg(t.dim)),
-                Cell::from(format!("{:>5}", format!("{rate}%")))
-                    .style(Style::default().fg(color)),
+                Cell::from(format!("{:>5}", format!("{rate}%"))).style(Style::default().fg(color)),
                 Cell::from(bar),
                 Cell::from(format!("{:>5}", avg)).style(Style::default().fg(t.dim)),
             ])
@@ -197,7 +193,11 @@ fn draw_heatmap(frame: &mut Frame, app: &App, area: Rect) {
     let t = &app.theme;
     let block = t.panel("Activity — last 52 weeks");
 
-    if app.submissions.is_empty() {
+    if !app
+        .submissions
+        .iter()
+        .any(|s| s.verdict != Verdict::Skipped)
+    {
         let msg = Paragraph::new("  No activity yet.")
             .style(Style::default().fg(t.dim))
             .block(block);
@@ -230,11 +230,12 @@ fn draw_heatmap(frame: &mut Frame, app: &App, area: Rect) {
         );
     }
 
-    let now = chrono::Utc::now();
+    let today = chrono::Local::now().date_naive();
     let mut day_counts: std::collections::HashMap<i64, u32> = std::collections::HashMap::new();
     for sub in &app.submissions {
-        if sub.verdict == Verdict::Accepted {
-            let days_ago = (now - sub.submitted_at).num_days();
+        if sub.verdict != Verdict::Skipped {
+            let submitted_day = sub.submitted_at.with_timezone(&chrono::Local).date_naive();
+            let days_ago = (today - submitted_day).num_days();
             if (0..365).contains(&days_ago) {
                 *day_counts.entry(days_ago).or_insert(0) += 1;
             }
@@ -260,7 +261,8 @@ fn draw_heatmap(frame: &mut Frame, app: &App, area: Rect) {
             };
             if x < grid.x + grid.width {
                 if let Some(cell) = frame.buffer_mut().cell_mut(Position::new(x, y)) {
-                    cell.set_symbol(" ").set_bg(if count == 0 { t.bg } else { color });
+                    cell.set_symbol(" ")
+                        .set_bg(if count == 0 { t.bg } else { color });
                 }
             }
         }

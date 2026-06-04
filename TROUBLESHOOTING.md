@@ -75,7 +75,7 @@ Sync with the terminal app via `~/Library/Application Support/cpos/config.toml` 
 
 ### Codeforces submits with wrong compiler (e.g. C++17 instead of C++23)
 
-Update the browser companion to **0.6.12+**. It picks the **newest matching compiler** from the submit dropdown (e.g. G++23 before G++17) instead of a stale numeric id.
+Update the browser companion to **0.6.13+**. It picks the **newest matching compiler** from the submit dropdown (e.g. G++23 before G++17, or CSES C++21 before C++17) instead of a stale/hardcoded fallback.
 
 Rebuild and upload from `extensions/chrome` if you install unpacked:
 

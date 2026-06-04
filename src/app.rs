@@ -7,9 +7,9 @@ use crate::data::models::*;
 use crate::engine::recommender::{self, Recommendation};
 use crate::engine::weakness;
 use crate::engine::workspace;
+use crate::platforms::PlatformClient;
 use crate::platforms::codeforces::CodeforcesClient;
 use crate::platforms::cses::CsesClient;
-use crate::platforms::PlatformClient;
 use crate::ui::theme::Theme;
 
 /// Messages sent from the background refresh task back to the UI thread.
@@ -26,7 +26,7 @@ pub enum TestMsg {
 }
 
 /// Persisted CSES progress (solved/attempted task ids) from a logged-in session.
-#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CsesProgress {
     pub solved: Vec<String>,
     pub attempted: Vec<String>,
@@ -36,13 +36,24 @@ fn cses_progress_path() -> PathBuf {
     Config::data_dir().join("cses_progress.json")
 }
 
+fn legacy_cses_progress_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".cpos-vscode/cses-progress.json"))
+}
+
+fn has_saved_cses_progress() -> bool {
+    cses_progress_path().exists()
+        || legacy_cses_progress_path()
+            .as_ref()
+            .map_or(false, |path| path.exists())
+}
+
 pub fn load_cses_progress() -> CsesProgress {
     std::fs::read_to_string(cses_progress_path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .or_else(|| {
-            dirs::home_dir().and_then(|h| {
-                std::fs::read_to_string(h.join(".cpos-vscode/cses-progress.json"))
+            legacy_cses_progress_path().and_then(|path| {
+                std::fs::read_to_string(path)
                     .ok()
                     .and_then(|s| serde_json::from_str(&s).ok())
             })
@@ -59,6 +70,98 @@ pub fn save_cses_progress(p: &CsesProgress) {
             let _ = std::fs::create_dir_all(&vscode_dir);
             let _ = std::fs::write(vscode_dir.join("cses-progress.json"), s);
         }
+    }
+}
+
+/// Save CSES progress and record newly observed CSES activity with today's
+/// timestamp. Existing solved history is kept as a baseline so CPOS does not
+/// invent dates for old CSES solves.
+pub fn save_cses_progress_with_activity(
+    progress: &CsesProgress,
+    cache: &Cache,
+) -> anyhow::Result<Vec<Submission>> {
+    use std::collections::{HashMap, HashSet};
+
+    let had_previous = has_saved_cses_progress();
+    let previous = load_cses_progress();
+
+    if !had_previous {
+        save_cses_progress(progress);
+        return Ok(Vec::new());
+    }
+
+    let previous_solved: HashSet<&str> = previous.solved.iter().map(String::as_str).collect();
+    let previous_attempted: HashSet<&str> = previous.attempted.iter().map(String::as_str).collect();
+    let current_solved: HashSet<&str> = progress.solved.iter().map(String::as_str).collect();
+
+    let problems: HashMap<String, Problem> = cache
+        .get_problems(Platform::Cses)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| (p.id.clone(), p))
+        .collect();
+    let now = chrono::Utc::now();
+
+    let mut submissions = Vec::new();
+    for task_id in &progress.solved {
+        if previous_solved.contains(task_id.as_str()) {
+            continue;
+        }
+        let problem = problems.get(task_id);
+        submissions.push(cses_progress_submission(
+            task_id,
+            Verdict::Accepted,
+            now,
+            problem,
+        ));
+    }
+    for task_id in &progress.attempted {
+        if current_solved.contains(task_id.as_str())
+            || previous_solved.contains(task_id.as_str())
+            || previous_attempted.contains(task_id.as_str())
+        {
+            continue;
+        }
+        let problem = problems.get(task_id);
+        submissions.push(cses_progress_submission(
+            task_id,
+            Verdict::Other,
+            now,
+            problem,
+        ));
+    }
+
+    if !submissions.is_empty() {
+        cache.upsert_submissions(&submissions)?;
+    }
+    save_cses_progress(progress);
+    Ok(submissions)
+}
+
+fn cses_progress_submission(
+    task_id: &str,
+    verdict: Verdict,
+    submitted_at: chrono::DateTime<chrono::Utc>,
+    problem: Option<&Problem>,
+) -> Submission {
+    let suffix = match verdict {
+        Verdict::Accepted => "solved",
+        _ => "attempted",
+    };
+    Submission {
+        platform: Platform::Cses,
+        id: format!("cses-{suffix}-{task_id}"),
+        problem_id: task_id.to_string(),
+        problem_name: problem
+            .map(|p| p.name.clone())
+            .unwrap_or_else(|| format!("CSES {task_id}")),
+        verdict,
+        language: "CSES progress".to_string(),
+        time_ms: None,
+        memory_kb: None,
+        submitted_at,
+        tags: problem.map(|p| p.tags.clone()).unwrap_or_default(),
+        rating: problem.and_then(|p| p.rating),
     }
 }
 
@@ -117,8 +220,19 @@ pub fn normalize_template_text(text: &str) -> String {
 /// Languages CPOS ships compile/run commands for, in a friendly display order.
 /// Used by the setup wizard and config picker.
 pub const LANGUAGES: [&str; 13] = [
-    "cpp", "python", "java", "c", "rust", "go", "kotlin", "csharp", "javascript", "ruby",
-    "haskell", "pascal", "pypy",
+    "cpp",
+    "python",
+    "java",
+    "c",
+    "rust",
+    "go",
+    "kotlin",
+    "csharp",
+    "javascript",
+    "ruby",
+    "haskell",
+    "pascal",
+    "pypy",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -361,9 +475,7 @@ impl App {
     pub fn finish_setup(&mut self) -> PathBuf {
         let handle = self.setup_handle.trim().to_string();
         if !handle.is_empty() {
-            self.config
-                .handles
-                .insert("codeforces".to_string(), handle);
+            self.config.handles.insert("codeforces".to_string(), handle);
         }
         self.config.default_language = self.setup_lang.clone();
 
@@ -412,11 +524,15 @@ impl App {
                 }
                 p.name.to_lowercase().contains(&query_lower)
                     || p.id.to_lowercase().contains(&query_lower)
-                    || p.tags.iter().any(|t| t.to_lowercase().contains(&query_lower))
+                    || p.tags
+                        .iter()
+                        .any(|t| t.to_lowercase().contains(&query_lower))
             })
             .filter(|p| {
                 if let Some(ref tag) = self.tag_filter {
-                    p.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase())
+                    p.tags
+                        .iter()
+                        .any(|t| t.to_lowercase() == tag.to_lowercase())
                         || p.category
                             .as_ref()
                             .map(|c| c.to_lowercase() == tag.to_lowercase())
@@ -498,10 +614,7 @@ impl App {
     }
 
     pub fn compute_recommendations(&mut self) {
-        let user_rating = self
-            .rating_history
-            .last()
-            .map(|r| r.new_rating);
+        let user_rating = self.rating_history.last().map(|r| r.new_rating);
         self.recommendations = recommender::recommend_problems(
             &self.submissions,
             &self.problems,
@@ -575,20 +688,20 @@ impl App {
         );
     }
 
-    /// Number of consecutive days (ending today or yesterday) that have at
-    /// least one accepted submission.
+    /// Number of consecutive CPOS activity days (ending today or yesterday).
+    /// Any non-skipped submission counts, not only accepted submissions.
     pub fn current_streak(&self) -> u32 {
         use std::collections::HashSet;
         let mut days: HashSet<chrono::NaiveDate> = HashSet::new();
         for s in &self.submissions {
-            if s.verdict == Verdict::Accepted {
-                days.insert(s.submitted_at.date_naive());
+            if s.verdict != Verdict::Skipped {
+                days.insert(s.submitted_at.with_timezone(&chrono::Local).date_naive());
             }
         }
         if days.is_empty() {
             return 0;
         }
-        let mut day = chrono::Utc::now().date_naive();
+        let mut day = chrono::Local::now().date_naive();
         if !days.contains(&day) {
             // Missing today doesn't break a streak yet; check yesterday.
             day = day.pred_opt().unwrap_or(day);
@@ -654,9 +767,7 @@ impl App {
 
     pub fn open_selected_problem(&self) {
         if let Some(p) = self.selected_problem() {
-            let _ = std::process::Command::new("open")
-                .arg(&p.url)
-                .spawn();
+            let _ = std::process::Command::new("open").arg(&p.url).spawn();
         }
     }
 
@@ -681,8 +792,7 @@ impl App {
     }
 
     pub fn set_solution_path(&mut self, problem: &Problem, path: PathBuf) {
-        self.solution_paths
-            .insert(Self::problem_key(problem), path);
+        self.solution_paths.insert(Self::problem_key(problem), path);
     }
 
     fn problem_key(problem: &Problem) -> String {
@@ -727,7 +837,11 @@ impl App {
         self.focus_problem(&problem);
         self.active_tab = Tab::Problems;
 
-        if let Some(path) = self.solution_paths.get(&Self::problem_key(&problem)).cloned() {
+        if let Some(path) = self
+            .solution_paths
+            .get(&Self::problem_key(&problem))
+            .cloned()
+        {
             if path.exists() {
                 let n = workspace::load_tests(&self.config, &problem).len();
                 self.status_message = format!(
@@ -760,7 +874,11 @@ impl App {
     /// Start the currently-selected recommendation, jumping into the Problems
     /// workflow so test/submit target it.
     pub fn start_recommended(&mut self) -> Option<StartedProblem> {
-        let problem = self.recommendations.get(self.recommend_selected)?.problem.clone();
+        let problem = self
+            .recommendations
+            .get(self.recommend_selected)?
+            .problem
+            .clone();
         self.focus_problem(&problem);
         self.active_tab = Tab::Problems;
         self.start_problem_inner(problem)
@@ -818,7 +936,9 @@ impl App {
     }
 
     pub fn selected_contest_url(&self) -> Option<String> {
-        self.contests.get(self.contest_selected).map(|c| c.url.clone())
+        self.contests
+            .get(self.contest_selected)
+            .map(|c| c.url.clone())
     }
 
     /// Filter the Problems tab to the selected contest's problems and switch to
@@ -839,8 +959,10 @@ impl App {
         let n = self.filtered_problems.len();
         if n > 0 {
             self.active_tab = Tab::Problems;
-            self.status_message =
-                format!("{n} problems from {} — press 'o' to start one", contest.name);
+            self.status_message = format!(
+                "{n} problems from {} — press 'o' to start one",
+                contest.name
+            );
         } else {
             self.contest_filter = None;
             self.apply_filters();
@@ -876,7 +998,11 @@ impl App {
         let ext = self.solution_ext();
         let template = workspace::template_content(&self.config, &self.config.default_language);
 
-        if let Some(external) = self.solution_paths.get(&Self::problem_key(&problem)).cloned() {
+        if let Some(external) = self
+            .solution_paths
+            .get(&Self::problem_key(&problem))
+            .cloned()
+        {
             let already_existed = external.exists();
             if !external.exists() {
                 if let Some(parent) = external.parent() {
@@ -892,7 +1018,11 @@ impl App {
             let url = problem.url.clone();
             self.status_message = format!(
                 "{} {} — {}",
-                if already_existed { "Reopened" } else { "Started" },
+                if already_existed {
+                    "Reopened"
+                } else {
+                    "Started"
+                },
                 problem.id,
                 external.display()
             );
@@ -904,8 +1034,7 @@ impl App {
             });
         }
 
-        if let Some(user_dir) =
-            workspace::active_user_save_dir(&self.config, &self.solution_paths)
+        if let Some(user_dir) = workspace::active_user_save_dir(&self.config, &self.solution_paths)
         {
             let solution_path = workspace::solution_path_in_dir(&user_dir, &problem, &ext);
             let already_existed = solution_path.exists();
@@ -914,8 +1043,10 @@ impl App {
             }
             if !already_existed {
                 if std::fs::write(&solution_path, &template).is_err() {
-                    self.status_message =
-                        format!("Could not create solution file at {}", solution_path.display());
+                    self.status_message = format!(
+                        "Could not create solution file at {}",
+                        solution_path.display()
+                    );
                     return None;
                 }
             }
@@ -924,7 +1055,11 @@ impl App {
             let url = problem.url.clone();
             self.status_message = format!(
                 "{} {} — {}",
-                if already_existed { "Reopened" } else { "Started" },
+                if already_existed {
+                    "Reopened"
+                } else {
+                    "Started"
+                },
                 problem.id,
                 solution_path.display()
             );
@@ -949,7 +1084,11 @@ impl App {
         let url = problem.url.clone();
         self.status_message = format!(
             "{} {} — {}",
-            if already_existed { "Reopened" } else { "Started" },
+            if already_existed {
+                "Reopened"
+            } else {
+                "Started"
+            },
             problem.id,
             solution_path.display()
         );
@@ -1006,7 +1145,11 @@ impl App {
                 "No solution file yet — press 'o' to open this problem first".to_string();
             return None;
         }
-        let cfg = match self.config.compile_commands.get(&self.config.default_language) {
+        let cfg = match self
+            .config
+            .compile_commands
+            .get(&self.config.default_language)
+        {
             Some(c) => c.clone(),
             None => {
                 self.status_message =
@@ -1077,7 +1220,10 @@ impl App {
                 "Codeforces Handle",
                 self.config.cf_handle().unwrap_or("").to_string(),
             ),
-            ("Default Language", language_display(&self.config.default_language)),
+            (
+                "Default Language",
+                language_display(&self.config.default_language),
+            ),
             ("Theme", self.config.theme.clone()),
             (
                 "Workspace Dir",
@@ -1113,8 +1259,7 @@ impl App {
                     .iter()
                     .position(|l| *l == self.config.default_language)
                     .unwrap_or(0);
-                self.config.default_language =
-                    LANGUAGES[(cur + 1) % LANGUAGES.len()].to_string();
+                self.config.default_language = LANGUAGES[(cur + 1) % LANGUAGES.len()].to_string();
                 let _ = self.config.save();
             }
             2 => self.cycle_theme(),
@@ -1170,7 +1315,8 @@ impl App {
         let saved_cses = self.config_selected == 5;
         let _ = self.config.save();
         self.status_message = if saved_cses && self.config.cses_session.is_some() {
-            "CSES cookie saved — press r to sync, or visit cses.fi/problemset/list/ logged in".to_string()
+            "CSES cookie saved — press r to sync, or visit cses.fi/problemset/list/ logged in"
+                .to_string()
         } else {
             "Configuration saved".to_string()
         };
@@ -1182,8 +1328,7 @@ impl App {
 fn refresh_contest_phases(contests: &mut [Contest]) {
     let now = chrono::Utc::now();
     for c in contests.iter_mut() {
-        let end = c.start_time
-            + chrono::Duration::seconds(c.duration_seconds as i64);
+        let end = c.start_time + chrono::Duration::seconds(c.duration_seconds as i64);
         c.phase = if now < c.start_time {
             ContestPhase::Before
         } else if now < end {
@@ -1214,7 +1359,9 @@ pub async fn fetch_and_cache(
         }
     };
 
-    let _ = tx.send(RefreshMsg::Status("Syncing Codeforces problemset…".to_string()));
+    let _ = tx.send(RefreshMsg::Status(
+        "Syncing Codeforces problemset…".to_string(),
+    ));
     match cf.fetch_problems().await {
         Ok(problems) => {
             let _ = cache.upsert_problems(&problems);
@@ -1234,13 +1381,20 @@ pub async fn fetch_and_cache(
     }
 
     if let Some(session) = cses_session.filter(|s| !s.trim().is_empty()) {
-        let _ = tx.send(RefreshMsg::Status("Reading your CSES progress…".to_string()));
+        let _ = tx.send(RefreshMsg::Status(
+            "Reading your CSES progress…".to_string(),
+        ));
         match cses.fetch_solved(&session).await {
             Ok((solved, attempted)) => {
                 let n = solved.len();
-                save_cses_progress(&CsesProgress { solved, attempted });
+                let progress = CsesProgress { solved, attempted };
+                let new_activity = save_cses_progress_with_activity(&progress, &cache)
+                    .map(|subs| subs.len())
+                    .unwrap_or(0);
                 let _ = tx.send(RefreshMsg::Status(if n == 0 {
                     "CSES connected (0 solved so far)".to_string()
+                } else if new_activity > 0 {
+                    format!("CSES: {n} problems solved ({new_activity} new activity)")
                 } else {
                     format!("CSES: {n} problems solved")
                 }));
@@ -1251,7 +1405,9 @@ pub async fn fetch_and_cache(
         }
     }
 
-    let _ = tx.send(RefreshMsg::Status("Fetching upcoming contests…".to_string()));
+    let _ = tx.send(RefreshMsg::Status(
+        "Fetching upcoming contests…".to_string(),
+    ));
     match cf.fetch_contests().await {
         Ok(contests) => {
             let _ = cache.upsert_contests(&contests);
@@ -1312,13 +1468,12 @@ fn parse_problem_url(url: &str) -> Option<Problem> {
 
     if base.contains("codeforces.com") {
         let pi = segs.iter().position(|s| *s == "problem")?;
-        let (contest, index) = if let Some(ci) =
-            segs.iter().position(|s| *s == "contest" || *s == "gym")
-        {
-            (segs.get(ci + 1)?.to_string(), segs.get(pi + 1)?.to_string())
-        } else {
-            (segs.get(pi + 1)?.to_string(), segs.get(pi + 2)?.to_string())
-        };
+        let (contest, index) =
+            if let Some(ci) = segs.iter().position(|s| *s == "contest" || *s == "gym") {
+                (segs.get(ci + 1)?.to_string(), segs.get(pi + 1)?.to_string())
+            } else {
+                (segs.get(pi + 1)?.to_string(), segs.get(pi + 2)?.to_string())
+            };
         if contest.is_empty() || index.is_empty() {
             return None;
         }
@@ -1345,7 +1500,11 @@ fn parse_problem_url(url: &str) -> Option<Problem> {
 fn submit_url_for(problem: &Problem) -> Option<String> {
     match problem.platform {
         Platform::Codeforces => {
-            let contest: String = problem.id.chars().take_while(|c| c.is_ascii_digit()).collect();
+            let contest: String = problem
+                .id
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
             if contest.is_empty() {
                 return None;
             }
@@ -1362,10 +1521,7 @@ fn submit_url_for(problem: &Problem) -> Option<String> {
                 "https://codeforces.com/contest/{contest}/submit?submittedProblemIndex={index}"
             ))
         }
-        Platform::Cses => Some(format!(
-            "https://cses.fi/problemset/submit/{}/",
-            problem.id
-        )),
+        Platform::Cses => Some(format!("https://cses.fi/problemset/submit/{}/", problem.id)),
         Platform::AtCoder => None,
     }
 }
@@ -1468,6 +1624,24 @@ pub async fn run_tests_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{Duration, Local};
+
+    fn submission_on_local_day(platform: Platform, days_ago: i64, verdict: Verdict) -> Submission {
+        let submitted_at = (Local::now() - Duration::days(days_ago)).with_timezone(&chrono::Utc);
+        Submission {
+            platform,
+            id: format!("sub-{days_ago}"),
+            problem_id: format!("p-{days_ago}"),
+            problem_name: "Problem".to_string(),
+            verdict,
+            language: "GNU C++23".to_string(),
+            time_ms: None,
+            memory_kb: None,
+            submitted_at,
+            tags: Vec::new(),
+            rating: None,
+        }
+    }
 
     #[test]
     fn parses_codeforces_problemset_url() {
@@ -1485,8 +1659,8 @@ mod tests {
 
     #[test]
     fn parses_codeforces_url_with_query_and_slash() {
-        let p =
-            parse_problem_url("https://codeforces.com/problemset/problem/1700/C/?locale=en").unwrap();
+        let p = parse_problem_url("https://codeforces.com/problemset/problem/1700/C/?locale=en")
+            .unwrap();
         assert_eq!(p.id, "1700C");
     }
 
@@ -1500,5 +1674,32 @@ mod tests {
     #[test]
     fn rejects_unrelated_url() {
         assert!(parse_problem_url("https://example.com/foo/bar").is_none());
+    }
+
+    #[test]
+    fn current_streak_counts_all_platform_activity_days() {
+        let mut app = App::new(Config::default());
+        app.submissions = (0..10)
+            .map(|days_ago| {
+                let platform = if days_ago % 2 == 0 {
+                    Platform::Codeforces
+                } else {
+                    Platform::Cses
+                };
+                let verdict = if days_ago == 3 || days_ago == 6 {
+                    Verdict::WrongAnswer
+                } else {
+                    Verdict::Accepted
+                };
+                submission_on_local_day(platform, days_ago, verdict)
+            })
+            .collect();
+        app.submissions.push(submission_on_local_day(
+            Platform::Cses,
+            10,
+            Verdict::Skipped,
+        ));
+
+        assert_eq!(app.current_streak(), 10);
     }
 }

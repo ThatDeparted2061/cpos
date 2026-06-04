@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CPOS Companion",
-  "version": "0.6.12",
+  "version": "0.6.13",
   "description": "Capture Codeforces and CSES problems for the CPOS VS Code extension. All data stays on your computer (localhost only).",
   "icons": {
     "16": "icons/icon16.png",

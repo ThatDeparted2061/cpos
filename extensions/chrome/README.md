@@ -2,7 +2,7 @@
 
 Browser extension for Codeforces and CSES. Captures public sample tests and relays them to CPOS on your machine. Autofills judge submit pages when you submit from VS Code or the terminal app.
 
-**Current version:** 0.6.12 (see [CHANGELOG.md](../../CHANGELOG.md)).
+**Current version:** 0.6.13 (see [CHANGELOG.md](../../CHANGELOG.md)).
 
 ## Install
 

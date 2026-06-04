@@ -1,19 +1,20 @@
-use std::io;
+use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::TryRecvError;
 use std::time::Duration;
 
 use anyhow::Result;
+use crossterm::ExecutableCommand;
 use crossterm::event::{
     self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind, KeyModifiers,
 };
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use crossterm::ExecutableCommand;
 use ratatui::prelude::*;
 
-use cpos::app::{self, App, CsesProgress, RefreshMsg, SetupStep, StartedProblem, TestMsg, Tab};
+use cpos::app::{self, App, CsesProgress, RefreshMsg, SetupStep, StartedProblem, Tab, TestMsg};
+use cpos::data::cache::Cache;
 use cpos::data::config::Config;
 use cpos::engine::capture::{self, CaptureMsg};
 use cpos::engine::workspace;
@@ -43,6 +44,10 @@ fn main() -> Result<()> {
 }
 
 async fn run_tui() -> Result<()> {
+    if maybe_prompt_for_updates().await? {
+        return Ok(());
+    }
+
     let config = Config::load()?;
     let mut app = App::new(config);
 
@@ -71,7 +76,8 @@ async fn run_tui() -> Result<()> {
 
     // Sync in the background on launch when cache is empty, contests missing,
     // or the last sync is older than a few hours.
-    if !app.setup_active && (app.problems.is_empty() || app.contests.is_empty() || sync_is_stale()) {
+    if !app.setup_active && (app.problems.is_empty() || app.contests.is_empty() || sync_is_stale())
+    {
         trigger_refresh(&mut app);
     }
 
@@ -86,6 +92,51 @@ async fn run_tui() -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn maybe_prompt_for_updates() -> Result<bool> {
+    if !cpos::engine::update::startup_check_enabled() {
+        return Ok(false);
+    }
+
+    let check = match tokio::time::timeout(
+        Duration::from_millis(900),
+        cpos::engine::update::check_latest(),
+    )
+    .await
+    {
+        Ok(Ok(check)) => check,
+        _ => return Ok(false),
+    };
+
+    if check.is_empty() {
+        return Ok(false);
+    }
+
+    eprintln!();
+    eprintln!("CPOS update available");
+    for update in &check.updates {
+        eprintln!("  {} -> {}", update.current, update.latest);
+    }
+    eprintln!();
+
+    if check.terminal_update_available() {
+        if io::stdin().is_terminal() && io::stderr().is_terminal() {
+            eprint!("Update CPOS now? [y/N] ");
+            let _ = io::stderr().flush();
+            let mut answer = String::new();
+            io::stdin().read_line(&mut answer)?;
+            if matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+                cpos::engine::update::run()?;
+                return Ok(true);
+            }
+        } else {
+            eprintln!("Run `cpos update` later to update CPOS.");
+        }
+    }
+
+    eprintln!("Opening CPOS...\n");
+    Ok(false)
 }
 
 async fn run_app(
@@ -115,50 +166,52 @@ async fn run_app(
                 // is active (template box, config edit, URL, or search).
                 Event::Paste(text) => handle_paste(app, &text),
                 Event::Key(key) => {
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-
-                if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-                    app.running = false;
-                    continue;
-                }
-
-                // The setup wizard is modal: it owns all input while open.
-                if app.setup_active {
-                    handle_setup_input(app, key.code);
-                    continue;
-                }
-
-                if app.search_active {
-                    handle_search_input(app, key.code);
-                    continue;
-                }
-
-                if app.rating_input_active {
-                    handle_rating_input(app, key.code);
-                    continue;
-                }
-
-                if app.url_input_active {
-                    handle_url_input(app, key.code);
-                    continue;
-                }
-
-                if app.config_editing {
-                    handle_config_edit_input(app, key.code);
-                    continue;
-                }
-
-                // The test-results popup swallows input until dismissed.
-                if app.show_test_popup {
-                    if matches!(key.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q')) {
-                        app.show_test_popup = false;
+                    if key.kind != KeyEventKind::Press {
+                        continue;
                     }
-                    continue;
-                }
 
-                handle_input(app, key.code);
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('c')
+                    {
+                        app.running = false;
+                        continue;
+                    }
+
+                    // The setup wizard is modal: it owns all input while open.
+                    if app.setup_active {
+                        handle_setup_input(app, key.code);
+                        continue;
+                    }
+
+                    if app.search_active {
+                        handle_search_input(app, key.code);
+                        continue;
+                    }
+
+                    if app.rating_input_active {
+                        handle_rating_input(app, key.code);
+                        continue;
+                    }
+
+                    if app.url_input_active {
+                        handle_url_input(app, key.code);
+                        continue;
+                    }
+
+                    if app.config_editing {
+                        handle_config_edit_input(app, key.code);
+                        continue;
+                    }
+
+                    // The test-results popup swallows input until dismissed.
+                    if app.show_test_popup {
+                        if matches!(key.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q')) {
+                            app.show_test_popup = false;
+                        }
+                        continue;
+                    }
+
+                    handle_input(app, key.code);
                 }
                 _ => {}
             }
@@ -354,23 +407,39 @@ fn drain_captures(app: &mut App) {
                 }
 
                 let _ = app.start_problem_from_capture(problem.clone());
-                app.persist_session(
-                    &problem,
-                    external.as_deref().map(Path::new),
-                );
+                app.persist_session(&problem, external.as_deref().map(Path::new));
             }
             CaptureMsg::CsesProgress(progress) => {
+                let progress = CsesProgress {
+                    solved: progress.solved,
+                    attempted: progress.attempted,
+                };
                 let n = progress.solved.len();
                 let a = progress.attempted.len();
-                app::save_cses_progress(&CsesProgress {
-                    solved: progress.solved.clone(),
-                    attempted: progress.attempted.clone(),
-                });
+                let new_activity = match Cache::open() {
+                    Ok(cache) => {
+                        app::save_cses_progress_with_activity(&progress, &cache).unwrap_or_default()
+                    }
+                    Err(_) => {
+                        app::save_cses_progress(&progress);
+                        Vec::new()
+                    }
+                };
+                let new_count = new_activity.len();
+                if !new_activity.is_empty() {
+                    app.submissions.extend(new_activity);
+                    app.submissions
+                        .sort_by(|a, b| b.submitted_at.cmp(&a.submitted_at));
+                    app.compute_analytics();
+                    app.compute_recommendations();
+                }
                 app.cses_solved = progress.solved.into_iter().collect();
                 app.cses_attempted = progress.attempted.into_iter().collect();
                 app.mark_solved_problems();
                 app.apply_filters();
-                app.status_message = if n > 0 {
+                app.status_message = if new_count > 0 {
+                    format!("CSES synced — {n} solved, {a} attempted ({new_count} today)")
+                } else if n > 0 {
                     format!("CSES synced — {n} solved, {a} attempted")
                 } else if a > 0 {
                     format!("CSES synced — {a} attempted")
@@ -780,7 +849,9 @@ Usage:
   cpos setup-browser   Generate a local browser helper extension
   cpos help            Show this help
 
-VS Code extension and browser companion update via their stores.",
+On startup, CPOS does a quick best-effort check for terminal app updates.
+Set CPOS_NO_UPDATE_CHECK=1 to skip this check.
+VS Code and Chrome update their extensions through their own stores.",
         version = env!("CARGO_PKG_VERSION")
     );
 }
@@ -851,7 +922,8 @@ fn setup_browser_command() -> Result<()> {
 }
 
 fn generate_content_js(port: u16) -> String {
-    format!(r#"
+    format!(
+        r#"
 // CPOS Browser Companion — auto-captures problems and samples.
 (function() {{
     const ENDPOINTS = [
@@ -982,7 +1054,8 @@ fn generate_content_js(port: u16) -> String {
         setTimeout(() => d.remove(), 3000);
     }}
 }})();
-"#)
+"#
+    )
 }
 
 fn generate_bookmarklet(port: u16) -> String {
@@ -993,7 +1066,8 @@ fn generate_bookmarklet(port: u16) -> String {
 }
 
 fn generate_setup_html(port: u16, ext_dir: &std::path::Path, bookmarklet: &str) -> String {
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">

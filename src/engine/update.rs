@@ -1,10 +1,149 @@
+use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
+use reqwest::Client;
 
 const REPO: &str = "https://github.com/Soham109/cpos";
 const INSTALL_SH: &str = "https://raw.githubusercontent.com/Soham109/cpos/main/install.sh";
+const RAW_CARGO_TOML: &str = "https://raw.githubusercontent.com/Soham109/cpos/main/Cargo.toml";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdateCheck {
+    pub updates: Vec<ComponentUpdate>,
+}
+
+impl UpdateCheck {
+    pub fn is_empty(&self) -> bool {
+        self.updates.is_empty()
+    }
+
+    pub fn terminal_update_available(&self) -> bool {
+        self.updates.iter().any(|u| u.can_update_from_cli)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComponentUpdate {
+    pub name: &'static str,
+    pub current: String,
+    pub latest: String,
+    pub hint: &'static str,
+    pub can_update_from_cli: bool,
+}
+
+pub fn startup_check_enabled() -> bool {
+    if env_flag("CPOS_NO_UPDATE_CHECK") {
+        return false;
+    }
+    if env_flag("CPOS_UPDATE_CHECK") {
+        return true;
+    }
+    dev_tree_from_exe().is_none()
+}
+
+pub async fn check_latest() -> Result<UpdateCheck> {
+    let client = Client::builder()
+        .user_agent(format!("cpos/{}", env!("CARGO_PKG_VERSION")))
+        .timeout(Duration::from_millis(700))
+        .build()?;
+
+    let cpos_override = std::env::var("CPOS_LATEST_CPOS_VERSION").ok();
+
+    let fetch_cpos = cpos_override.is_none();
+    let cargo = async {
+        if fetch_cpos {
+            fetch_text(&client, RAW_CARGO_TOML).await
+        } else {
+            None
+        }
+    };
+    let cargo = cargo.await;
+
+    let mut updates = Vec::new();
+    if let Some(latest) = cpos_override.or_else(|| cargo.and_then(|text| cargo_version(&text))) {
+        push_if_newer(
+            &mut updates,
+            "CPOS terminal app",
+            env!("CARGO_PKG_VERSION"),
+            &latest,
+            "CPOS can update this now, or you can run `cpos update` later.",
+            true,
+        );
+    }
+
+    Ok(UpdateCheck { updates })
+}
+
+async fn fetch_text(client: &Client, url: &str) -> Option<String> {
+    client.get(url).send().await.ok()?.text().await.ok()
+}
+
+fn push_if_newer(
+    updates: &mut Vec<ComponentUpdate>,
+    name: &'static str,
+    current: &str,
+    latest: &str,
+    hint: &'static str,
+    can_update_from_cli: bool,
+) {
+    if version_cmp(latest, current) == Ordering::Greater {
+        updates.push(ComponentUpdate {
+            name,
+            current: current.to_string(),
+            latest: latest.to_string(),
+            hint,
+            can_update_from_cli,
+        });
+    }
+}
+
+fn cargo_version(text: &str) -> Option<String> {
+    let value: toml::Value = text.parse().ok()?;
+    value
+        .get("package")?
+        .get("version")?
+        .as_str()
+        .map(ToString::to_string)
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on" | "always"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn version_cmp(a: &str, b: &str) -> Ordering {
+    let a_parts = version_parts(a);
+    let b_parts = version_parts(b);
+    let len = a_parts.len().max(b_parts.len());
+    for i in 0..len {
+        let av = a_parts.get(i).copied().unwrap_or(0);
+        let bv = b_parts.get(i).copied().unwrap_or(0);
+        match av.cmp(&bv) {
+            Ordering::Equal => {}
+            other => return other,
+        }
+    }
+    Ordering::Equal
+}
+
+fn version_parts(version: &str) -> Vec<u64> {
+    version
+        .trim()
+        .trim_start_matches('v')
+        .split(|c: char| !(c.is_ascii_digit()))
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| s.parse::<u64>().ok())
+        .collect()
+}
 
 pub fn run() -> Result<()> {
     eprintln!("CPOS v{}", env!("CARGO_PKG_VERSION"));
@@ -98,7 +237,9 @@ fn current_exe_paths() -> Vec<PathBuf> {
 }
 
 fn path_text(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/").to_ascii_lowercase()
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
 }
 
 fn installed_by_cargo_bin() -> bool {
@@ -315,5 +456,20 @@ mod tests {
     fn normalizes_install_paths_for_detection() {
         let path = PathBuf::from(r"C:\Users\dev\scoop\apps\cpos\current\cpos.exe");
         assert!(path_text(&path).contains("/scoop/apps/cpos/"));
+    }
+
+    #[test]
+    fn compares_semver_like_versions() {
+        assert_eq!(version_cmp("0.1.3", "0.1.2"), Ordering::Greater);
+        assert_eq!(version_cmp("v0.3.21", "0.3.21"), Ordering::Equal);
+        assert_eq!(version_cmp("0.6.12", "0.6.13"), Ordering::Less);
+    }
+
+    #[test]
+    fn parses_cargo_manifest_version() {
+        assert_eq!(
+            cargo_version("[package]\nversion = \"1.2.3\"\n").as_deref(),
+            Some("1.2.3")
+        );
     }
 }

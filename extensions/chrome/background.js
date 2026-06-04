@@ -262,7 +262,40 @@ async function cposCsesSubmitOnPage(code, fileName, language) {
     java: ["Java"],
     rust: ["Rust"]
   };
-  const optionHints = { cpp: ["C++17"], rust: ["2021"], python: ["CPython3"] };
+  const optionStrategies = {
+    cpp: { version: /(?:C\+\+\s*)?(\d{2})/i, prefer: [/C\+\+/i] },
+    rust: { version: /(\d{4})/i, prefer: [/Rust/i] },
+    python: { prefer: [/CPython3/i, /Python\s*3/i, /CPython/i] }
+  };
+
+  function pickBestOption(select, strategy) {
+    if (!select || !strategy) return false;
+    let best = null;
+    let bestScore = -1;
+    for (const opt of select.options) {
+      const text = opt.textContent || "";
+      let score = 0;
+      const version = strategy.version?.exec(text);
+      if (version) score += Number(version[1]) * 100;
+      const prefer = strategy.prefer || [];
+      for (let i = 0; i < prefer.length; i++) {
+        if (prefer[i].test(text)) {
+          score += prefer.length - i;
+          break;
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = opt;
+      }
+    }
+    if (best && bestScore > 0) {
+      select.value = best.value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+    return false;
+  }
 
   for (let i = 0; i < 40; i++) {
     let form = null;
@@ -296,14 +329,9 @@ async function cposCsesSubmitOnPage(code, fileName, language) {
       }
 
       const optionSelect = form.querySelector('select[name="option"]');
-      const opts = optionHints[language] || [];
-      if (optionSelect && opts.length) {
-        for (const opt of optionSelect.options) {
-          if (opts.some((n) => (opt.textContent || "").includes(n))) {
-            optionSelect.value = opt.value;
-            break;
-          }
-        }
+      const optionStrategy = optionStrategies[language];
+      if (optionSelect && optionStrategy) {
+        pickBestOption(optionSelect, optionStrategy);
       }
 
       await sleep(200);
