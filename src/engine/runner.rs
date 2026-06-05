@@ -16,24 +16,36 @@ fn build_dir() -> PathBuf {
     dir
 }
 
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn expand_command(command: &str, source: &Path, output: &str, dir: &Path) -> String {
+    let source_str = shell_quote(&source.to_string_lossy());
+    let output_str = shell_quote(output);
+    let dir_str = shell_quote(&dir.to_string_lossy());
+    let classname = shell_quote(&source.file_stem().unwrap_or_default().to_string_lossy());
+
+    command
+        .replace("{source}", &source_str)
+        .replace("{output}", &output_str)
+        .replace("{dir}", &dir_str)
+        .replace("{classname}", &classname)
+}
+
 pub async fn compile(source: &Path, config: &CompileConfig) -> Result<Option<String>> {
     let compile_cmd = match &config.compile {
         Some(cmd) => cmd,
         None => return Ok(None),
     };
 
-    let source_str = source.to_string_lossy();
     let stem = source.file_stem().unwrap_or_default().to_string_lossy();
     let dir = build_dir();
 
     // Build artifacts land in the data dir's build folder; `{output}` is a name
     // relative to that folder, `{source}` is the absolute path to the user's
     // file, so the workspace stays clean.
-    let expanded = compile_cmd
-        .replace("{source}", &source_str)
-        .replace("{output}", &stem)
-        .replace("{dir}", &dir.to_string_lossy())
-        .replace("{classname}", &stem);
+    let expanded = expand_command(compile_cmd, source, &stem, &dir);
 
     let output = Command::new("sh")
         .arg("-c")
@@ -60,17 +72,11 @@ pub async fn run_test(
     index: usize,
     timeout_ms: u64,
 ) -> TestResult {
-    let source_str = source.to_string_lossy();
     let stem = source.file_stem().unwrap_or_default().to_string_lossy();
     let dir = build_dir();
     let output_str = compiled_output.unwrap_or(&stem);
 
-    let run_cmd = config
-        .run
-        .replace("{source}", &source_str)
-        .replace("{output}", output_str)
-        .replace("{dir}", &dir.to_string_lossy())
-        .replace("{classname}", &stem);
+    let run_cmd = expand_command(&config.run, source, output_str, &dir);
 
     let start = Instant::now();
 
@@ -110,9 +116,7 @@ pub async fn run_test(
 
     match result {
         Ok(Ok(output)) => {
-            let actual = String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .to_string();
+            let actual = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let expected = test.expected_output.trim().to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
@@ -151,6 +155,46 @@ pub async fn run_test(
             time_ms: elapsed,
             error: Some("Time limit exceeded".to_string()),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_quote_handles_spaces_and_apostrophes() {
+        assert_eq!(
+            shell_quote("/tmp/Competitive Programming/Zat's/1300A.cpp"),
+            "'/tmp/Competitive Programming/Zat'\\''s/1300A.cpp'"
+        );
+    }
+
+    #[test]
+    fn expand_command_quotes_shell_placeholders() {
+        let expanded = expand_command(
+            "g++ -std=c++17 -O2 -o {output} {source}",
+            Path::new("/tmp/Competitive Programming/USACO/1300A.cpp"),
+            "1300A",
+            Path::new("/tmp/cpos build"),
+        );
+
+        assert_eq!(
+            expanded,
+            "g++ -std=c++17 -O2 -o '1300A' '/tmp/Competitive Programming/USACO/1300A.cpp'"
+        );
+    }
+
+    #[test]
+    fn expand_command_quotes_run_output_and_dir() {
+        let expanded = expand_command(
+            "java -cp {dir} {classname}",
+            Path::new("/tmp/Competitive Programming/Main.java"),
+            "Main",
+            Path::new("/tmp/cpos build"),
+        );
+
+        assert_eq!(expanded, "java -cp '/tmp/cpos build' 'Main'");
     }
 }
 

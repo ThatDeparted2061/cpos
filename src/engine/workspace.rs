@@ -118,8 +118,33 @@ pub fn is_default_cpos_tree(path: &Path, config: &Config) -> bool {
     path.starts_with(&root)
 }
 
-/// Prefer the folder the user is actually working in: VS Code capture path, last session,
-/// or current directory when it looks like a project — not `~/cpos/codeforces/…`.
+pub fn has_explicit_workspace_dir(config: &Config) -> bool {
+    config
+        .workspace_dir
+        .as_ref()
+        .is_some_and(|s| !s.trim().is_empty())
+}
+
+fn project_like_cwd(config: &Config) -> Option<PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    if is_default_cpos_tree(&cwd, config) {
+        return None;
+    }
+
+    let looks_like_project = cwd.join(".git").is_dir()
+        || cwd.read_dir().ok().is_some_and(|entries| {
+            entries.filter_map(Result::ok).any(|e| {
+                matches!(
+                    e.path().extension().and_then(|s| s.to_str()),
+                    Some("cpp" | "c" | "py" | "java" | "rs")
+                )
+            })
+        });
+    looks_like_project.then_some(cwd)
+}
+
+/// Prefer the folder the user is actually working in: VS Code capture path,
+/// current project directory, or last session — not the configured fallback tree.
 pub fn active_user_save_dir(
     config: &Config,
     solution_paths: &HashMap<String, PathBuf>,
@@ -132,26 +157,17 @@ pub fn active_user_save_dir(
         }
     }
 
+    if let Some(cwd) = project_like_cwd(config) {
+        return Some(cwd);
+    }
+
+    if has_explicit_workspace_dir(config) {
+        return None;
+    }
+
     if let Some((_, Some(path), _)) = load_latest_session() {
         if !is_default_cpos_tree(&path, config) {
             return path.parent().map(|p| p.to_path_buf());
-        }
-    }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        if !is_default_cpos_tree(&cwd, config) {
-            let looks_like_project = cwd.join(".git").is_dir()
-                || cwd.read_dir().ok().is_some_and(|entries| {
-                    entries.filter_map(Result::ok).any(|e| {
-                        matches!(
-                            e.path().extension().and_then(|s| s.to_str()),
-                            Some("cpp" | "c" | "py" | "java" | "rs")
-                        )
-                    })
-                });
-            if looks_like_project {
-                return Some(cwd);
-            }
         }
     }
 
@@ -427,6 +443,37 @@ mod tests {
         };
         let path = solution_path(&Config::default(), &p, "cpp");
         assert!(path.to_string_lossy().ends_with("codeforces/2232F.cpp"));
+    }
+
+    #[test]
+    fn explicit_workspace_keeps_current_project_context() {
+        let config = Config {
+            workspace_dir: Some("/tmp/cpos preferred".to_string()),
+            ..Config::default()
+        };
+
+        assert_eq!(
+            active_user_save_dir(&config, &HashMap::new()),
+            project_like_cwd(&config)
+        );
+    }
+
+    #[test]
+    fn live_solution_path_can_still_choose_external_dir() {
+        let config = Config {
+            workspace_dir: Some("/tmp/cpos preferred".to_string()),
+            ..Config::default()
+        };
+        let mut solution_paths = HashMap::new();
+        solution_paths.insert(
+            "Codeforces:2232F".to_string(),
+            PathBuf::from("/tmp/contest folder/2232F.cpp"),
+        );
+
+        assert_eq!(
+            active_user_save_dir(&config, &solution_paths),
+            Some(PathBuf::from("/tmp/contest folder"))
+        );
     }
 
     #[test]

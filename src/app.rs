@@ -657,7 +657,11 @@ impl App {
         };
 
         if let Some(path) = solution_path {
-            self.set_solution_path(&problem, path);
+            let can_restore_path = !workspace::has_explicit_workspace_dir(&self.config)
+                || workspace::is_default_cpos_tree(&path, &self.config);
+            if can_restore_path {
+                self.set_solution_path(&problem, path);
+            }
         }
 
         self.focus_problem(&problem);
@@ -1276,6 +1280,8 @@ impl App {
     }
 
     pub fn save_config_edit(&mut self) {
+        let old_workspace_root = (self.config_selected == 3).then(|| workspace::root(&self.config));
+
         match self.config_selected {
             0 => {
                 self.config
@@ -1311,12 +1317,25 @@ impl App {
             }
             _ => {}
         }
+
+        let workspace_changed = old_workspace_root
+            .as_ref()
+            .is_some_and(|old| old != &workspace::root(&self.config));
+        if workspace_changed {
+            self.solution_paths.clear();
+        }
+
         self.config_editing = false;
         let saved_cses = self.config_selected == 5;
         let _ = self.config.save();
         self.status_message = if saved_cses && self.config.cses_session.is_some() {
             "CSES cookie saved — press r to sync, or visit cses.fi/problemset/list/ logged in"
                 .to_string()
+        } else if workspace_changed {
+            format!(
+                "Configuration saved — workspace is {}",
+                workspace::root(&self.config).display()
+            )
         } else {
             "Configuration saved".to_string()
         };
