@@ -142,7 +142,7 @@
   const liveSources = {
     repo: "https://api.github.com/repos/Soham109/cpos",
     latestRelease: "https://api.github.com/repos/Soham109/cpos/releases/latest",
-    vscodeDownloads: "https://badgen.net/vs-marketplace/d/sohamaggarwal.cpos-vscode",
+    vscodeExtensionId: "sohamaggarwal.cpos-vscode",
     redditPost: "https://www.reddit.com/r/codeforces/comments/1tvjxub/i_built_a_better_cph/.json?raw_json=1",
   };
 
@@ -170,26 +170,39 @@
     return value.toFixed(value >= 10 ? 0 : 1).replace(/\.0$/, "");
   }
 
-  function firstNumber(text) {
-    const match = String(text || "").match(/[\d,.]+/);
-    return match ? Number(match[0].replace(/,/g, "")) : NaN;
+  function formatInstallCount(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    if (n >= 10000) return formatCompact(n);
+    return n.toLocaleString("en-US");
   }
 
-  function badgeNumber(svgText) {
-    const labelMatch = String(svgText || "").match(/aria-label="[^"]*?:\s*([\d,.]+)/i);
-    return labelMatch ? Number(labelMatch[1].replace(/,/g, "")) : firstNumber(svgText);
+  async function fetchVscodeInstalls() {
+    const res = await fetch("https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json;api-version=3.0-preview.1",
+      },
+      body: JSON.stringify({
+        filters: [{ criteria: [{ filterType: 7, value: liveSources.vscodeExtensionId }] }],
+        flags: 914,
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+    const stats = data?.results?.[0]?.extensions?.[0]?.statistics || [];
+    const install = stats.find((s) => s.statisticName === "install")?.value;
+    const downloads = stats.find((s) => s.statisticName === "downloadCount")?.value;
+    return Math.round(Math.max(Number(install) || 0, Number(downloads) || 0));
   }
 
   async function fetchJson(url) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
-  }
-
-  async function fetchText(url) {
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.text();
   }
 
   async function loadLiveStats() {
@@ -206,10 +219,9 @@
       })
       .catch(() => {});
 
-    fetchText(liveSources.vscodeDownloads)
-      .then((badgeSvg) => {
-        const downloads = badgeNumber(badgeSvg);
-        const formatted = formatCompact(downloads);
+    fetchVscodeInstalls()
+      .then((installs) => {
+        const formatted = formatInstallCount(installs);
         if (formatted) setLiveStat("vscode-downloads", formatted);
       })
       .catch(() => {});
