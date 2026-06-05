@@ -6,7 +6,8 @@ If something isn’t listed here, open a [GitHub issue](https://github.com/Soham
 | Component | Version file |
 | --- | --- |
 | VS Code extension | `extensions/vscode/package.json` |
-| Browser companion | `extensions/chrome/manifest.json` |
+| Browser companion (Chrome) | `extensions/chrome/manifest.json` |
+| Browser companion (Firefox) | `extensions/firefox/manifest.json` |
 | Terminal app | `Cargo.toml` |
 
 ---
@@ -68,24 +69,26 @@ Sync with the terminal app via `~/Library/Application Support/cpos/config.toml` 
 
 ### Submit does nothing
 
-1. Install the [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) in **Chrome** (Edge/Brave work too).
+1. Install the [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) in **Chrome** (Edge/Brave work too), or load the Firefox companion from `extensions/firefox`.
 2. Stay **logged in** to Codeforces or CSES in that browser.
-3. CPOS only talks to Chrome on `127.0.0.1` — not Safari or Firefox.
+3. CPOS talks to supported browser companions over `127.0.0.1`; Safari is not supported.
 4. Keep the VS Code extension running (capture server on port `27122`).
 
 ### Codeforces submits with wrong compiler (e.g. C++17 instead of C++23)
 
 Update the browser companion to **0.6.13+**. It picks the **newest matching compiler** from the submit dropdown (e.g. G++23 before G++17, or CSES C++21 before C++17) instead of a stale/hardcoded fallback.
 
-Rebuild and upload from `extensions/chrome` if you install unpacked:
+Rebuild and upload from `extensions/chrome` if you install Chrome unpacked:
 
 ```bash
 ./package-store.sh
 ```
 
+For Firefox source installs, pull the latest repo changes and reload `extensions/firefox/manifest.json` from `about:debugging`.
+
 ### Submit opens but code is empty or form not filled
 
-- Log in on Codeforces/CSES in the same Chrome profile as the extension.
+- Log in on Codeforces/CSES in the same browser profile as the companion.
 - Disable other extensions that might block scripting on judge pages.
 - Retry after a full page load on the submit URL.
 
@@ -209,7 +212,7 @@ where link.exe       # should find Visual Studio's linker
 
 ### Don’t need the terminal app?
 
-**VS Code extension + Chrome companion** is enough for capture, Run All, and submit. The TUI is optional (catalog, contests, analytics, recommendations).
+**VS Code extension + browser companion** is enough for capture, Run All, and submit. The TUI is optional (catalog, contests, analytics, recommendations).
 
 ---
 
@@ -225,7 +228,7 @@ where link.exe       # should find Visual Studio's linker
 
 ### Submit from TUI opens wrong browser
 
-The terminal app queues submit for the **Chrome companion** only (same as VS Code). Install the extension and use Chrome while logged in.
+The terminal app queues submit for the **browser companion** only (same as VS Code). Install a supported companion and use that browser while logged in.
 
 ### CSES progress not syncing
 
@@ -247,7 +250,7 @@ Update to **0.3.20+** or reinstall from the latest VSIX/Marketplace build.
 
 ## Still stuck?
 
-1. Note your versions (extension, Chrome companion, terminal app if used).
+1. Note your versions (VS Code extension, browser companion, terminal app if used).
 2. Copy the **full error** from **Output → CPOS** or your terminal.
 3. Say which step failed: TUI install, capture, Run All, submit, or source install.
 4. [Open an issue](https://github.com/Soham109/cpos/issues) or ask in your community with that info.

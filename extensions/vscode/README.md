@@ -4,7 +4,7 @@
 
 Open a problem in your browser. CPOS creates your solution file in the folder you have open, loads the sample tests, and provides a side panel to run samples and submit.
 
-Part of the **CPOS** project — works with the [terminal app](https://github.com/Soham109/cpos) and [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm). All components sync over localhost.
+Part of the **CPOS** project — works with the [terminal app](https://github.com/Soham109/cpos), the [Chrome browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm), and the Firefox companion in the CPOS repo. All components sync over localhost.
 
 ## Demo
 
@@ -24,7 +24,7 @@ Part of the **CPOS** project — works with the [terminal app](https://github.co
 
 ## How it works
 
-1. Install from the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode)** and the **[browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)**
+1. Install from the **[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode)** and a browser companion: **[Chrome Web Store](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)** or Firefox from source in the CPOS repo
 2. Open the folder where you want solution files
 3. Open a Codeforces or CSES problem in your browser
 4. CPOS creates the solution file (for example `1982C.cpp`) with samples attached
@@ -50,7 +50,7 @@ Keep the **terminal app** running for browsing, recommendations, and analytics. 
 
 By default, files are created in the **currently open workspace folder**.
 
-Submit requires the [browser companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) and an active login on the judge site.
+Submit requires a browser companion and an active login on the judge site.
 
 ## Troubleshooting
 

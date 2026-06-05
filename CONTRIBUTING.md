@@ -8,9 +8,10 @@ For how the pieces fit together, see [ARCHITECTURE.md](ARCHITECTURE.md). Release
 
 | Component | Current version |
 | --- | --- |
-| Terminal app | 0.1.0 (`Cargo.toml`) |
-| VS Code extension | 0.3.21 (`extensions/vscode/package.json`) |
-| Browser companion | 0.6.12 (`extensions/chrome/manifest.json`) |
+| Terminal app | 0.1.3 (`Cargo.toml`) |
+| VS Code extension | 0.3.22 (`extensions/vscode/package.json`) |
+| Browser companion (Chrome) | 0.6.13 (`extensions/chrome/manifest.json`) |
+| Browser companion (Firefox) | 0.0.1 (`extensions/firefox/manifest.json`) |
 
 ## Ways to help
 
@@ -27,7 +28,8 @@ You don't need permission to open an issue or start a small PR.
 | --- | --- |
 | `src/` | Terminal app (Rust + ratatui) |
 | `extensions/vscode/` | VS Code extension |
-| `extensions/chrome/` | Browser companion |
+| `extensions/chrome/` | Chrome/Edge/Brave browser companion |
+| `extensions/firefox/` | Firefox browser companion |
 | `docs/` | Landing site (`cpos.sohamaggarwal.com`) |
 | `tools/` | Screenshot render/optimize scripts |
 
@@ -57,9 +59,11 @@ Open the `extensions/vscode` folder in VS Code/Cursor and press **F5** to launch
 
 ### Browser companion
 
-Install **[CPOS Companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)** from the Chrome Web Store (Chrome, Edge, Brave).
+Install **[CPOS Companion](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm)** from the Chrome Web Store (Chrome, Edge, Brave), or load the Firefox companion from `extensions/firefox` while it is not yet listed on AMO.
 
-To work on the extension locally, load unpacked from `extensions/chrome` — see [`extensions/chrome/README.md`](extensions/chrome/README.md) and the publish script there.
+To work on the Chrome extension locally, load unpacked from `extensions/chrome` — see [`extensions/chrome/README.md`](extensions/chrome/README.md) and the publish script there.
+
+To work on the Firefox extension locally, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on...**, and select `extensions/firefox/manifest.json`. See [`extensions/firefox/README.md`](extensions/firefox/README.md) and `extensions/firefox/package-firefox.sh`.
 
 ### Landing page
 

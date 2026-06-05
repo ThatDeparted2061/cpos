@@ -7,7 +7,7 @@ CPOS is three local clients plus a static website. Nothing runs in the cloud; th
 ```
 ┌─────────────────┐     capture / submit      ┌──────────────────┐
 │ Browser         │ ───────────────────────▶│ VS Code (:27122) │
-│ (Chrome ext.)   │                         │  extension       │
+│ companion       │                         │  extension       │
 └────────┬────────┘                         └────────┬─────────┘
          │                                           │
          │ capture / submit                          │ forward capture
@@ -24,7 +24,8 @@ CPOS is three local clients plus a static website. Nothing runs in the cloud; th
 | --- | --- |
 | `src/` | Terminal application (ratatui UI, sync, recommendations, local test runner) |
 | `extensions/vscode/` | VS Code extension: side panel, webview UI, capture HTTP server |
-| `extensions/chrome/` | Browser companion: DOM capture on problem pages, submit autofill on judge pages |
+| `extensions/chrome/` | Chrome/Edge/Brave browser companion: DOM capture on problem pages, submit autofill on judge pages |
+| `extensions/firefox/` | Firefox browser companion: same localhost capture/submit protocol, source/self-installed until AMO publishing |
 | `docs/` | Static landing site |
 
 ## Localhost protocol

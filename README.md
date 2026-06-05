@@ -11,6 +11,7 @@ Open a problem in your browser. CPOS creates the file, loads the samples, and le
   <a href="https://youtu.be/5HTatBfpK5A"><img alt="Demo" src="https://img.shields.io/badge/demo-YouTube-red?logo=youtube&logoColor=white"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode"><img alt="VS Code" src="https://img.shields.io/badge/VS%20Code-Extension-007ACC?logo=visualstudiocode&logoColor=white"></a>
   <a href="https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm"><img alt="Chrome" src="https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white"></a>
+  <a href="extensions/firefox"><img alt="Firefox source install" src="https://img.shields.io/badge/Firefox-source_install-FF7139?logo=firefoxbrowser&logoColor=white"></a>
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue.svg">
   <img alt="rust" src="https://img.shields.io/badge/built%20with-Rust-orange.svg">
 </p>
@@ -120,6 +121,7 @@ Configure the VS Code save location under **Settings → Extensions → CPOS** (
 | What | Where |
 | --- | --- |
 | Browser companion | [Chrome Web Store](https://chromewebstore.google.com/detail/gjnbapmjonegeeamdeahcoojgokeogmm) (Chrome, Edge, Brave) |
+| Browser companion | [Firefox source install](extensions/firefox) (temporary/self-installed for now; AMO publishing later) |
 | VS Code extension | [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode) |
 | Terminal app | macOS/Linux: `brew tap Soham109/cpos https://github.com/Soham109/cpos` then `brew install cpos` |
 | Terminal app | Windows: `scoop bucket add cpos https://github.com/Soham109/cpos` then `scoop install cpos` |
@@ -152,7 +154,7 @@ Set `CPOS_NO_UPDATE_CHECK=1` to skip startup checks.
 
 **VS Code extension** — updates from the Marketplace automatically (or **Extensions → CPOS → Update**).
 
-**Browser companion** — updates automatically from the Chrome Web Store.
+**Browser companion** — Chrome/Edge/Brave update automatically from the Chrome Web Store. Firefox source installs do not auto-update yet; pull the latest repo changes, reload `extensions/firefox/manifest.json`, or rebuild/sign a new XPI.
 
 <p align="center">
   <img src="docs/problems.png" alt="Problems" width="410">
