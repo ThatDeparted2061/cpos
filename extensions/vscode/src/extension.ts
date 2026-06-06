@@ -52,6 +52,13 @@ type RunResult = {
   stderr?: string;
 };
 
+type SolutionVideo = { id: string; title: string; channel: string };
+type SolutionState = {
+  problemId: string;
+  status: "loading" | "done" | "error";
+  videos: SolutionVideo[];
+};
+
 const OUTPUT = vscode.window.createOutputChannel("CPOS");
 let server: http.Server | undefined;
 let serverConflict = false;
@@ -64,6 +71,16 @@ const PANEL_THEME_KEY = "cpos.panelTheme";
 
 const runResults = new Map<string, RunResult[]>();
 let runningFor: string | undefined;
+let solutionData: SolutionState | undefined;
+
+// Anti-cheat: never surface editorials/solutions for a problem whose Codeforces
+// contest is still running. We cache CF's contest.list (phase per contest) and
+// treat anything that is not FINISHED as off-limits.
+type CfContestInfo = { phase: string };
+let cfContestCache = new Map<string, CfContestInfo>();
+let cfContestLoaded = false;
+let cfContestFetchedAt = 0;
+let cfContestFetching = false;
 
 type PendingSubmit = {
   platform: string;
@@ -149,6 +166,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (config().get<boolean>("autoStartCaptureServer", true)) {
     await startCaptureServer().catch((error) => warnServer(error));
   }
+  // Warm the CF contest-phase cache so the Solution tab is gated correctly from
+  // the first render (no flash) for problems in a live contest.
+  void refreshCfContestList();
   refreshActions();
 }
 
@@ -610,9 +630,13 @@ function shellForRun(): { file: string; args: (command: string) => string[] } {
 function applyPlatformRun(config: CompileConfig): CompileConfig {
   if (process.platform !== "win32") return config;
   let run = config.run;
+  let compile = config.compile;
   if (run === "./{output}") run = "{output}.exe";
   else if (run.startsWith("./{output}")) run = run.replace(/^\.\/\{output\}/, "{output}.exe");
-  return { ...config, run };
+  // Explicitly add .exe to compile output so the run target matches.
+  // Matches "-o {output}" or "-o  {output}" but not "-o {output}.jar" etc.
+  if (compile) compile = compile.replace(/-o\s+\{output\}(?!\.)/, "-o {output}.exe");
+  return { ...config, compile, run };
 }
 
 function pythonRunner(): string {
@@ -1054,6 +1078,62 @@ function parseCodeforcesId(id: string): { contest?: string; index?: string } {
   return { contest: match[1], index: match[2].toUpperCase() };
 }
 
+// Refresh CF contest phases at most once per minute. On a successful update we
+// re-render the panel so the Solution tab appears/disappears with the new data.
+async function refreshCfContestList(): Promise<void> {
+  const now = Date.now();
+  if (cfContestFetching) return;
+  if (cfContestLoaded && now - cfContestFetchedAt < 60_000) return;
+  cfContestFetching = true;
+  try {
+    const resp = await fetch("https://codeforces.com/api/contest.list?gym=false");
+    if (resp.ok) {
+      const json = (await resp.json()) as { status?: string; result?: Array<{ id: number; phase: string }> };
+      if (json.status === "OK" && Array.isArray(json.result)) {
+        const map = new Map<string, CfContestInfo>();
+        for (const c of json.result) map.set(String(c.id), { phase: c.phase });
+        cfContestCache = map;
+        cfContestFetchedAt = now;
+        cfContestLoaded = true;
+        refreshActions();
+      }
+    }
+  } catch {
+    /* offline / API down — leave cache as-is */
+  } finally {
+    cfContestFetching = false;
+  }
+}
+
+// true = contest running (hide solution), false = finished (allow),
+// undefined = not yet known (cache not loaded).
+function cfContestOngoing(contest: string): boolean | undefined {
+  const info = cfContestCache.get(contest);
+  if (info) return info.phase !== "FINISHED";
+  // Loaded but contest absent → not an official ongoing contest (e.g. old/gym) → allow.
+  if (cfContestLoaded) return false;
+  return undefined;
+}
+
+// Whether the Solution tab must be hidden for this problem. Only Codeforces
+// contest problems can be gated; CSES and the CF problemset have no live contest.
+function isSolutionBlocked(meta: ProblemMeta | undefined): boolean {
+  if (!meta) return false;
+  const platform = meta.platform.toLowerCase();
+  if (platform !== "codeforces" && platform !== "cf") return false;
+  const { contest } = parseCodeforcesId(meta.id);
+  if (!contest) return false;
+  const ongoing = cfContestOngoing(contest);
+  if (ongoing === undefined) {
+    // Unknown until we fetch — block now (anti-cheat safe) and refresh.
+    void refreshCfContestList();
+    return true;
+  }
+  // Keep phases fresh so the tab unlocks promptly once the contest ends.
+  if (cfContestLoaded && Date.now() - cfContestFetchedAt >= 60_000) void refreshCfContestList();
+  return ongoing;
+}
+
 async function activeSolutionPath(): Promise<string | undefined> {
   const editor = vscode.window.activeTextEditor;
   if (editor?.document.uri.scheme === "file") {
@@ -1105,10 +1185,15 @@ function languageForFile(source: string): string {
 
 function expandCommand(command: string, source: string, outputName: string, buildDir: string): string {
   const classname = path.parse(source).name;
+  // On Windows use full absolute path for .exe so cmd.exe finds the binary
+  // even if the current-directory PATH lookup doesn't work as expected.
+  const exeExpand = process.platform === "win32"
+    ? quoteShellPath(path.join(buildDir, `${outputName}.exe`))
+    : `${outputName}.exe`;
   // Replace compound tokens before `{output}` so we never produce `"Hello".exe`.
   return command
     .replaceAll("{output}.jar", `${outputName}.jar`)
-    .replaceAll("{output}.exe", `${outputName}.exe`)
+    .replaceAll("{output}.exe", exeExpand)
     .replaceAll("{source}", quoteShellPath(source))
     .replaceAll("{output}", outputName)
     .replaceAll("{dir}", quoteShellPath(buildDir))
@@ -1213,6 +1298,8 @@ type PanelState = {
   serverConflict: boolean;
   running: boolean;
   theme?: string;
+  solution?: SolutionState;
+  solutionBlocked: boolean;
 };
 
 async function currentState(): Promise<PanelState> {
@@ -1220,6 +1307,7 @@ async function currentState(): Promise<PanelState> {
   const meta = source ? await loadProblemMetaForFile(source) : await loadProblemMeta();
   const tests = source ? await loadSamples(source) : [];
   const results = source ? runResults.get(source) ?? [] : [];
+  const solution = meta && solutionData?.problemId === meta.id ? solutionData : undefined;
   return {
     source,
     fileName: source ? path.basename(source) : "No active file",
@@ -1229,12 +1317,115 @@ async function currentState(): Promise<PanelState> {
     serverRunning: server !== undefined,
     serverConflict,
     running: runningFor === source && source !== undefined,
-    theme: extContext?.globalState.get<string>(PANEL_THEME_KEY)
+    theme: extContext?.globalState.get<string>(PANEL_THEME_KEY),
+    solution,
+    solutionBlocked: isSolutionBlocked(meta)
   };
 }
 
 function refreshActions(): void {
   actionsProvider?.refresh();
+}
+
+function buildSolutionQuery(meta: ProblemMeta): string {
+  const platform = meta.platform.toLowerCase();
+  if (platform === "codeforces" || platform === "cf") {
+    return `codeforces ${meta.id} ${meta.name} editorial solution`;
+  }
+  if (platform === "cses") {
+    return `cses ${meta.name} solution tutorial`;
+  }
+  return `${meta.id} ${meta.name} editorial solution`;
+}
+
+async function fetchAndCacheSolution(): Promise<void> {
+  const source = await activeSolutionPath();
+  const meta = source ? await loadProblemMetaForFile(source) : await loadProblemMeta();
+  if (!meta) return;
+  // Never fetch solutions for a problem in a live contest, even if a stale
+  // webview message slips through after the tab was hidden.
+  if (isSolutionBlocked(meta)) return;
+  if (solutionData?.problemId === meta.id &&
+      (solutionData.status === "done" || solutionData.status === "loading")) return;
+
+  solutionData = { problemId: meta.id, status: "loading", videos: [] };
+  refreshActions();
+
+  const videos = await fetchYouTubeVideos(buildSolutionQuery(meta));
+  solutionData = { problemId: meta.id, status: videos.length > 0 ? "done" : "error", videos };
+  refreshActions();
+}
+
+async function fetchYouTubeVideos(query: string): Promise<SolutionVideo[]> {
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`;
+  try {
+    const resp = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
+      }
+    });
+    if (!resp.ok) return [];
+    const html = await resp.text();
+    return parseYouTubeVideos(html);
+  } catch {
+    return [];
+  }
+}
+
+function parseYouTubeVideos(html: string): SolutionVideo[] {
+  // Try structured ytInitialData first (more info: title + channel)
+  const markerIdx = html.indexOf("var ytInitialData = ");
+  if (markerIdx !== -1) {
+    const endIdx = html.indexOf(";</script>", markerIdx);
+    if (endIdx !== -1) {
+      try {
+        const raw = html.slice(markerIdx + "var ytInitialData = ".length, endIdx);
+        const data = JSON.parse(raw) as Record<string, unknown>;
+        const videos = walkForVideoRenderers(data, 3);
+        if (videos.length > 0) return videos;
+      } catch { /* fallthrough */ }
+    }
+  }
+  // Fallback: regex extraction of bare video IDs
+  const seen = new Set<string>();
+  const results: SolutionVideo[] = [];
+  const re = /"videoId":"([a-zA-Z0-9_-]{11})"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null && results.length < 3) {
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      results.push({ id: m[1], title: "", channel: "" });
+    }
+  }
+  return results;
+}
+
+function walkForVideoRenderers(obj: unknown, max: number): SolutionVideo[] {
+  const results: SolutionVideo[] = [];
+  function walk(o: unknown): void {
+    if (!o || typeof o !== "object" || results.length >= max) return;
+    if (Array.isArray(o)) {
+      for (const item of o) walk(item);
+      return;
+    }
+    const rec = o as Record<string, unknown>;
+    if (rec.videoRenderer && typeof rec.videoRenderer === "object") {
+      const vr = rec.videoRenderer as Record<string, unknown>;
+      if (typeof vr.videoId === "string") {
+        const titleRuns = ((vr.title as Record<string, unknown>)?.runs) as unknown[] | undefined;
+        const title = Array.isArray(titleRuns)
+          ? String((titleRuns[0] as Record<string, unknown>)?.text ?? "") : "";
+        const chRuns = ((vr.ownerText as Record<string, unknown>)?.runs) as unknown[] | undefined;
+        const channel = Array.isArray(chRuns)
+          ? String((chRuns[0] as Record<string, unknown>)?.text ?? "") : "";
+        if (title) results.push({ id: vr.videoId, title, channel });
+      }
+    }
+    for (const val of Object.values(rec)) walk(val);
+  }
+  walk(obj);
+  return results;
 }
 
 class CposActionsProvider implements vscode.WebviewViewProvider {
@@ -1305,6 +1496,14 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       case "persistTests":
         await this.persistTests(message.tests ?? []);
         break;
+      case "fetchSolution":
+        void fetchAndCacheSolution();
+        break;
+      case "openUrl": {
+        const url = (message as { url?: string }).url;
+        if (url) await vscode.env.openExternal(vscode.Uri.parse(url));
+        break;
+      }
       default:
         break;
     }
@@ -1345,7 +1544,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${this.view!.webview.cspSource} https: data:; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${this.view!.webview.cspSource} https: data:; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; frame-src https://www.youtube-nocookie.com https://www.youtube.com;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script nonce="${nonce}">
   window.MathJax = {
@@ -1973,6 +2172,91 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     overflow-x: hidden;
     padding-right: 6px;
   }
+
+  /* ── Statement tab: appended sample tests ─────────────────── */
+  .stmt-sample { margin: 14px 0 0 0; }
+  .stmt-sample-hdr { font-size: 11px; font-weight: 700; color: var(--fg); margin-bottom: 6px; }
+  .stmt-sample-io { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stmt-sample-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin-bottom: 3px; }
+  .stmt-sample-pre {
+    margin: 0; padding: 7px 9px; background: var(--input-bg);
+    border: 1px solid var(--border-soft); border-radius: 4px;
+    font-size: 11px; font-family: var(--mono); white-space: pre;
+    overflow-x: auto; line-height: 1.45; cursor: default;
+  }
+  .stmt-blk { display: block; border-radius: 2px; }
+  .stmt-blk-odd  { background: rgba(128,128,128,0.10); }
+  .stmt-blk-even { background: transparent; }
+
+  /* ── Solution tab ─────────────────────────────────────────── */
+  .sol-wrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 6px 12px 0;
+  }
+  .accordion {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .acc-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    background: var(--panel);
+    border: none;
+    color: var(--fg);
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    text-align: left;
+    letter-spacing: 0.04em;
+  }
+  .acc-header:hover { background: var(--highlight); }
+  .acc-arrow { color: var(--dim); font-size: 12px; transition: transform 0.18s; display: inline-block; }
+  .acc-arrow.closed { transform: rotate(-90deg); }
+  .acc-body { display: none; border-top: 1px solid var(--border-soft); }
+  .acc-body.open { display: block; }
+  .sol-video-card { padding: 10px 10px 12px; border-bottom: 1px solid var(--border-soft); }
+  .sol-video-card:last-child { border-bottom: none; }
+  .sol-video-meta { font-size: 11px; margin-bottom: 8px; color: var(--fg); line-height: 1.4; }
+  .sol-channel { color: var(--dim); font-size: 10px; }
+  .sol-video-wrap { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 4px; background: #000; }
+  .sol-video-wrap iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+  .sol-video-thumb { cursor: pointer; border: 1px solid var(--border-soft); }
+  .sol-thumb-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.18s, filter 0.18s; }
+  .sol-video-thumb:hover .sol-thumb-img, .sol-video-thumb:focus-visible .sol-thumb-img { transform: scale(1.04); filter: brightness(0.78); }
+  .sol-play-badge {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 46px; height: 32px; border-radius: 7px;
+    background: rgba(18,18,18,0.78); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; padding-left: 2px; pointer-events: none;
+    transition: background 0.18s, transform 0.18s; box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+  }
+  .sol-video-thumb:hover .sol-play-badge, .sol-video-thumb:focus-visible .sol-play-badge { background: #cc0000; transform: translate(-50%, -50%) scale(1.08); }
+  .sol-spinner { padding: 14px 12px; color: var(--dim); font-size: 11px; text-align: center; }
+  .sol-empty { padding: 12px; color: var(--dim); font-size: 11px; }
+  .sol-embed-err { padding: 10px 12px; font-size: 10px; color: var(--dim); font-style: italic; }
+  .sol-link {
+    padding: 9px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border-soft);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sol-link:hover { background: var(--highlight); }
+  .sol-link:last-child { border-bottom: none; }
+  .sol-no-meta { padding: 18px 12px; text-align: center; color: var(--dim); line-height: 1.6; border-style: dashed; }
 </style>
 </head>
 <body>
@@ -2529,10 +2813,17 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   }
 
   function tabsHtml() {
-    if (!state.meta || !state.meta.statementHtml) return '';
+    if (!state.meta) return '';
+    const tabs = [{ id: 'tests', label: 'Tests' }];
+    if (state.meta.statementHtml) tabs.push({ id: 'statement', label: 'Statement' });
+    // Solution tab is hidden while the problem's contest is still running.
+    if (!state.solutionBlocked) tabs.push({ id: 'solution', label: 'Solution' });
     return '<div class="tabs" role="tablist">'
-      + '<button role="tab" aria-selected="' + (activeTab === "tests" ? "true" : "false") + '" tabindex="0" class="tab ' + (activeTab === "tests" ? "active" : "") + '" data-act="setTab" data-tab="tests">Tests</button>'
-      + '<button role="tab" aria-selected="' + (activeTab === "statement" ? "true" : "false") + '" tabindex="0" class="tab ' + (activeTab === "statement" ? "active" : "") + '" data-act="setTab" data-tab="statement">Statement</button>'
+      + tabs.map(function(t) {
+        return '<button role="tab" aria-selected="' + (activeTab === t.id ? "true" : "false")
+          + '" tabindex="0" class="tab ' + (activeTab === t.id ? "active" : "")
+          + '" data-act="setTab" data-tab="' + t.id + '">' + t.label + '</button>';
+      }).join('')
       + '</div>';
   }
 
@@ -2568,24 +2859,161 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 
   function statementSection() {
     let inner = sanitizeHtml(state.meta.statementHtml);
-    // CSES captures have no title element; prepend the problem name so the
-    // layout matches the Codeforces statement (centered title at the top).
     const isCses = String(state.meta.platform || "").toLowerCase() === "cses";
     if (isCses && state.meta.name) {
       inner = '<h1 class="cses-title">' + esc(state.meta.name) + '</h1>' + inner;
     }
+    // CF content.js strips .sample-tests before capturing, so hasSamples is
+    // always false for CF — we re-inject them in the correct position.
+    var buildBlockedPre = function(text, blockSizes, cls) {
+      var safe = text == null ? '' : String(text);
+      if (!blockSizes || !blockSizes.length || blockSizes.length <= 1) {
+        return '<pre class="stmt-sample-pre ' + cls + '">' + esc(safe) + '</pre>';
+      }
+      var lines = safe.split('\\n');
+      var lineIdx = 0;
+      var spans = [];
+      for (var b = 0; b < blockSizes.length; b++) {
+        var sz = blockSizes[b];
+        var blockLines = lines.slice(lineIdx, lineIdx + sz);
+        var alt = b % 2 === 0 ? ' stmt-blk-odd' : ' stmt-blk-even';
+        spans.push('<span class="stmt-blk' + alt + '" data-blk="' + b + '">' + esc(blockLines.join('\\n')) + '</span>');
+        lineIdx += sz;
+      }
+      if (lineIdx < lines.length) {
+        spans.push('<span class="stmt-blk">' + esc(lines.slice(lineIdx).join('\\n')) + '</span>');
+      }
+      return '<pre class="stmt-sample-pre ' + cls + '">' + spans.join('\\n') + '</pre>';
+    };
+    const hasSamples = inner.indexOf('class="sample-tests"') !== -1 || inner.indexOf("class='sample-tests'") !== -1;
+    if (!hasSamples && state.tests && state.tests.length > 0) {
+      var rows = state.tests.map(function(t, si) {
+        var inHtml  = buildBlockedPre(t.input, t.input_block_sizes, 'stmt-in');
+        var outHtml = buildBlockedPre(t.expected_output, t.output_block_sizes, 'stmt-out');
+        return '<div class="stmt-sample" data-si="' + si + '">'
+          + '<div class="stmt-sample-hdr">Example ' + (si + 1) + '</div>'
+          + '<div class="stmt-sample-io">'
+          + '<div><div class="stmt-sample-lbl">Input</div>' + inHtml + '</div>'
+          + '<div><div class="stmt-sample-lbl">Output</div>' + outHtml + '</div>'
+          + '</div></div>';
+      }).join('');
+      var samplesHtml = '<div class="sample-tests" style="margin:24px 0 0 0">'
+        + '<div class="section-title">Sample Tests</div>' + rows + '</div>';
+      // Insert BEFORE the Note section (CF puts Note after sample-tests).
+      // If no Note exists (CSES), append at end.
+      var noteIdx = inner.indexOf('<div class="note"');
+      if (noteIdx !== -1) {
+        inner = inner.slice(0, noteIdx) + samplesHtml + inner.slice(noteIdx);
+      } else {
+        inner += samplesHtml;
+      }
+    }
     return '<div class="statement-view-wrapper"><div class="statement-view">' + inner + '</div></div>';
+  }
+
+  function solutionSection() {
+    const m = state.meta;
+    if (!m) {
+      return '<div class="box sol-no-meta">Capture a problem first to see solutions.</div>';
+    }
+    const sol = state.solution;
+    const status = sol ? sol.status : 'idle';
+
+    // ── Video accordion content ──
+    let videoContent;
+    if (status === 'loading' || status === 'idle') {
+      videoContent = '<div class="sol-spinner">&#9680; Searching for video solutions…</div>';
+    } else if (status === 'done' && sol.videos && sol.videos.length > 0) {
+      // YouTube's IFrame player can't verify the embedding origin inside a VS Code
+      // webview (no usable referrer) → Error 153. So instead of embedding, show a
+      // real thumbnail that opens the watch page in the user's actual browser.
+      videoContent = sol.videos.map(function(v) {
+        const watchUrl = 'https://www.youtube.com/watch?v=' + esc(v.id);
+        const thumb = 'https://i.ytimg.com/vi/' + esc(v.id) + '/hqdefault.jpg';
+        const meta = v.title
+          ? '<div class="sol-video-meta">' + esc(v.title)
+              + (v.channel ? ' <span class="sol-channel">— ' + esc(v.channel) + '</span>' : '')
+              + '</div>'
+          : '';
+        return '<div class="sol-video-card" data-vid="' + esc(v.id) + '">' + meta
+          + '<div class="sol-video-wrap sol-video-thumb" data-act="openUrl" data-href="' + watchUrl + '" '
+          + 'role="button" tabindex="0" title="Open on YouTube">'
+          + '<img class="sol-thumb-img" src="' + thumb + '" alt="" loading="lazy" />'
+          + '<span class="sol-play-badge">&#9654;</span>'
+          + '</div></div>';
+      }).join('');
+    } else {
+      videoContent = '<div class="sol-empty">Could not auto-load videos — use the links below to search manually.</div>';
+    }
+
+    // ── Links accordion content ──
+    const pid  = String(m.id   || '');
+    const pname = String(m.name || '');
+    const plat  = String(m.platform || '').toLowerCase();
+    const isCf  = plat === 'codeforces' || plat === 'cf';
+    const ytQ = encodeURIComponent((isCf ? 'codeforces ' : '') + pid + ' ' + pname + ' editorial solution');
+    const gQ  = encodeURIComponent((isCf ? 'Codeforces ' : '') + pid + ' ' + pname + ' editorial solution');
+
+    const linkDefs = [
+      { icon: '▶', label: 'YouTube: ' + pid + ' editorial', href: 'https://www.youtube.com/results?search_query=' + ytQ },
+      { icon: '⌕', label: 'Google: ' + pid + ' editorial',  href: 'https://www.google.com/search?q=' + gQ }
+    ];
+    if (isCf) {
+      const cfMatch = pid.match(/^(\\d+)([A-Za-z]\\d*)$/);
+      if (cfMatch) {
+        linkDefs.push({ icon: '◉', label: 'CF Problem page', href: 'https://codeforces.com/problemset/problem/' + cfMatch[1] + '/' + cfMatch[2].toUpperCase() });
+        linkDefs.push({ icon: '◉', label: 'CF Editorial search', href: 'https://codeforces.com/blog/search?q=' + encodeURIComponent(pid) });
+      }
+    }
+    if (plat === 'cses') {
+      linkDefs.push({ icon: '◉', label: 'CSES problem page', href: m.url });
+    }
+    const linksHtml = linkDefs.map(function(l) {
+      return '<div class="sol-link" data-act="openUrl" data-href="' + l.href + '">'
+        + '<span>' + l.icon + '</span><span>' + esc(l.label) + '</span></div>';
+    }).join('');
+
+    function accordion(id, title, content, open) {
+      return '<div class="accordion">'
+        + '<button class="acc-header" data-act="toggleAccordion" data-accordion="' + id + '">'
+        + '<span>' + title + '</span>'
+        + '<span class="acc-arrow' + (open ? '' : ' closed') + '">&#9662;</span>'
+        + '</button>'
+        + '<div class="acc-body' + (open ? ' open' : '') + '" data-accordion-body="' + id + '">'
+        + content + '</div></div>';
+    }
+
+    return '<div class="sol-wrapper">'
+      + accordion('videos', 'Video Solutions', videoContent, true)
+      + accordion('links',  'Editorials &amp; Links', linksHtml, true)
+      + '</div>';
   }
 
   function render() {
     const app = document.getElementById("app");
     let body = "";
-    if (activeTab === "statement" && state.meta && state.meta.statementHtml) {
-      body = statementSection();
-    } else {
-      body = statbar() + actions() + testsSection();
+    // Build the active tab's body defensively: a throw here must NEVER leave the
+    // panel blank. If a tab-builder fails, fall back to the Tests view (and show
+    // the error) so the user always has a working panel.
+    try {
+      if (activeTab === "statement" && state.meta && state.meta.statementHtml) {
+        body = statementSection();
+      } else if (activeTab === "solution" && state.meta && !state.solutionBlocked) {
+        body = solutionSection();
+      } else {
+        body = statbar() + actions() + testsSection();
+      }
+    } catch (err) {
+      try { body = statbar() + actions() + testsSection(); }
+      catch (_) { body = ""; }
+      body = '<div class="box" style="border-color:var(--err,#c33);color:var(--dim);font-size:11px;padding:10px;margin-bottom:8px">'
+        + 'The "' + esc(activeTab) + '" view failed to render: ' + esc(String(err && err.message ? err.message : err))
+        + '</div>' + body;
     }
-    app.innerHTML = header() + tabsHtml() + body;
+    var chrome;
+    try { chrome = header() + tabsHtml(); }
+    catch (e) { chrome = '<div class="header">CPOS</div>'; }
+    app.innerHTML = chrome + body;
     renderedSource = state.source;
     bind();
     applyIoSplit(ioSplit);
@@ -2596,8 +3024,10 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     });
     autoResizeTextareas(app);
 
-    if (activeTab === "statement" && window.MathJax && typeof window.MathJax.typesetPromise === "function") {
-      window.MathJax.typesetPromise([app.querySelector('.statement-view')]).catch(function(){});
+    if (activeTab === "statement") {
+      if (window.MathJax && typeof window.MathJax.typesetPromise === "function") {
+        window.MathJax.typesetPromise([app.querySelector('.statement-view')]).catch(function(){});
+      }
     }
   }
 
@@ -2674,7 +3104,22 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
         if (act === "setTab") {
           activeTab = el.getAttribute("data-tab") || "tests";
           persistUiState();
+          if (activeTab === "solution") send("fetchSolution");
           render();
+          return;
+        }
+        if (act === "toggleAccordion") {
+          const which = el.getAttribute("data-accordion");
+          if (!which) return;
+          const body = document.querySelector('[data-accordion-body="' + which + '"]');
+          if (body) body.classList.toggle("open");
+          const arrow = el.querySelector(".acc-arrow");
+          if (arrow) arrow.classList.toggle("closed");
+          return;
+        }
+        if (act === "openUrl") {
+          const href = el.getAttribute("data-href");
+          if (href) send("openUrl", { url: href });
           return;
         }
         if (act === "runSingle") { send("runSingle", { index: Number(idx), tests: collectTests() }); return; }

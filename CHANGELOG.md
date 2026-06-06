@@ -5,7 +5,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.3 | `Cargo.toml` |
-| VS Code extension | 0.3.25 | `extensions/vscode/package.json` |
+| VS Code extension | 0.3.26 | `extensions/vscode/package.json` |
 | Browser companion (Chrome) | 0.6.14 | `extensions/chrome/manifest.json` |
 | Browser companion (Firefox) | 0.0.2 | `extensions/firefox/manifest.json` |
 
@@ -15,6 +15,24 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Firefox browser companion source build in `extensions/firefox`, with temporary add-on install instructions and XPI packaging for self-signing or future AMO distribution.
+
+---
+
+## VS Code extension — 0.3.26 - 2026-06-06
+
+### Added
+- **Solution tab** — a new third tab in the panel surfaces video solutions and editorial links for the open problem. Videos are shown as clickable thumbnails (YouTube watch page opens in the system browser). The accordion also provides one-click links to YouTube search, Google, and the Codeforces problem/editorial pages.
+- **Anti-cheat gate** — the Solution tab is automatically hidden while a Codeforces contest is still running. The extension fetches CF's `contest.list` API on activation (and refreshes at most once per minute) and suppresses the tab for any problem whose contest phase is not `FINISHED`. Applies only to Codeforces contest problems; CSES and finished contests are unaffected.
+- **Sample tests in Statement view** — for Codeforces problems (where the browser companion strips `.sample-tests` during capture) the sample I/O is re-injected into the statement view so it reads like the original problem page. Alternating row striping makes multi-block test cases easy to scan.
+- **Windows C++ compilation fix** — the compile command now appends `.exe` to the `-o` output flag and the run path uses the full absolute path, so compiled binaries are found correctly on Windows regardless of PATH lookup behaviour.
+
+### Fixed
+- **Blank panel regression** — single-backslash `\n` literals inside the webview template literal were being cooked into raw newlines by the outer template literal at runtime, causing an unterminated-string syntax error that silently killed the entire webview script and left all tabs blank.
+- **CF regex in webview** — the Codeforces contest-number regex inside the webview script was also mangled by the outer template literal (`\d` → `d`), breaking the "CF Problem page / Editorial" links. Both are now correctly double-escaped.
+
+### Changed
+- YouTube embeds removed from the Solution tab. YouTube's IFrame player rejects the `vscode-webview://` origin (Error 153 on every video regardless of per-video embedding settings); replaced with thumbnail cards that open the real watch page in the system browser.
+- Statement tab sample blocks no longer have hover highlight animation; the static odd/even row striping is kept. Tests tab IO hover is unchanged.
 
 ---
 
