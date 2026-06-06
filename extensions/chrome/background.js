@@ -427,6 +427,8 @@ async function handleCses(pending, _endpoint) {
   return ok;
 }
 
+const attemptCounts = new Map();
+
 async function pollOnce() {
   if (handling) return;
   const found = await fetchPending();
@@ -443,9 +445,14 @@ async function pollOnce() {
       ok = await handleCses(pending, found.endpoint);
     }
     
-    // Always acknowledge (clear) the pending submit, even if it failed.
-    // If it fails (e.g. user is logged out), we don't want to retry infinitely and open 25 tabs!
-    void ack(found.endpoint);
+    const key = pending.submitUrl || pending.code.substring(0, 50);
+    const attempts = (attemptCounts.get(key) || 0) + 1;
+    attemptCounts.set(key, attempts);
+
+    if (ok || attempts >= 15) {
+      void ack(found.endpoint);
+      attemptCounts.delete(key);
+    }
   } finally {
     handling = false;
   }

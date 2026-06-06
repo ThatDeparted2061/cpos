@@ -790,7 +790,8 @@ async function saveSamples(solutionPath: string, tests: TestCase[]): Promise<voi
 }
 
 function hashPath(p: string): string {
-  const norm = process.platform === "win32" ? p.toLowerCase() : p;
+  let norm = path.normalize(p);
+  norm = process.platform === "win32" ? norm.toLowerCase() : norm;
   return Buffer.from(norm).toString("base64url");
 }
 
@@ -2368,9 +2369,9 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 
   function tabsHtml() {
     if (!state.meta || !state.meta.statementHtml) return '';
-    return '<div class="tabs">'
-      + '<button class="tab ' + (activeTab === "tests" ? "active" : "") + '" data-act="setTab" data-tab="tests">Tests</button>'
-      + '<button class="tab ' + (activeTab === "statement" ? "active" : "") + '" data-act="setTab" data-tab="statement">Statement</button>'
+    return '<div class="tabs" role="tablist">'
+      + '<button role="tab" aria-selected="' + (activeTab === "tests" ? "true" : "false") + '" tabindex="0" class="tab ' + (activeTab === "tests" ? "active" : "") + '" data-act="setTab" data-tab="tests">Tests</button>'
+      + '<button role="tab" aria-selected="' + (activeTab === "statement" ? "true" : "false") + '" tabindex="0" class="tab ' + (activeTab === "statement" ? "active" : "") + '" data-act="setTab" data-tab="statement">Statement</button>'
       + '</div>';
   }
 
@@ -2473,7 +2474,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
           return;
         }
         if (act === "setTab") {
-          activeTab = el.getAttribute("data-tab");
+          activeTab = el.getAttribute("data-tab") || "tests";
           persistUiState();
           render();
           return;

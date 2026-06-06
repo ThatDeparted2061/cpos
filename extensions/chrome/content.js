@@ -1196,15 +1196,7 @@
           payload.tests.length > 0
             ? `${payload.tests.length} sample(s) → ${synced.join(", ")}`
             : synced.join(", ");
-        
-        let debugMsg = `CPOS Capture Debug:
-• ID: ${payload.id || 'N/A'}
-• Name: ${payload.name || 'N/A'}
-• URL: ${payload.url || 'N/A'}
-• Tests Count: ${payload.tests ? payload.tests.length : 0}
-• Has Statement HTML: ${payload.statementHtml ? 'Yes (' + payload.statementHtml.length + ' chars)' : 'No'}
-`;
-        toast(debugMsg + `\nStatus: ${detail}`, true);
+        toast(`CPOS: Captured ${payload.name || payload.id || 'Problem'} → ${detail}`, true);
       } else {
         toast("CPOS not running. Open VS Code with CPOS, or start the CPOS TUI.", false);
       }
