@@ -257,6 +257,14 @@
         const sampleTests = clone.querySelector(".sample-tests");
         if (sampleTests) sampleTests.remove();
         clone.querySelectorAll(".MathJax_Preview, .MathJax, mjx-container, .mjx-chtml, .MathJax_CHTML").forEach(el => el.remove());
+        
+        clone.querySelectorAll("script[type^='math/tex']").forEach(el => {
+          const isBlock = el.getAttribute("type").includes("mode=display");
+          const tex = el.textContent;
+          const textNode = document.createTextNode(isBlock ? `$$${tex}$$` : `\\(${tex}\\)`);
+          el.replaceWith(textNode);
+        });
+
         statementHtml = clone.outerHTML;
       }
     } else if (location.hostname === "cses.fi") {
