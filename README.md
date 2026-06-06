@@ -62,6 +62,7 @@ Write code in the editor. The CPOS panel runs samples and submits.
 
 Install from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=sohamaggarwal.cpos-vscode). Open your folder, capture a problem from the browser, then use the **CPOS panel**:
 
+- **Tests / Statement tabs** — switch between samples and the captured problem statement, rendered natively with MathJax
 - **Run All** — compile and test every sample
 - **Submit** — autofill the judge submit page in your logged-in browser
 - **Problem** — open the statement again

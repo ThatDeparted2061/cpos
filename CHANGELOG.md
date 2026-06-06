@@ -5,9 +5,9 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.3 | `Cargo.toml` |
-| VS Code extension | 0.3.23 | `extensions/vscode/package.json` |
-| Browser companion (Chrome) | 0.6.13 | `extensions/chrome/manifest.json` |
-| Browser companion (Firefox) | 0.0.1 | `extensions/firefox/manifest.json` |
+| VS Code extension | 0.3.24 | `extensions/vscode/package.json` |
+| Browser companion (Chrome) | 0.6.14 | `extensions/chrome/manifest.json` |
+| Browser companion (Firefox) | 0.0.2 | `extensions/firefox/manifest.json` |
 
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -15,6 +15,35 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Firefox browser companion source build in `extensions/firefox`, with temporary add-on install instructions and XPI packaging for self-signing or future AMO distribution.
+
+---
+
+## VS Code extension — 0.3.24 - 2026-06-06
+
+### Added
+- **Statement view** — the panel now has Tests / Statement tabs. The Statement tab renders the captured problem statement natively with MathJax, styled to read like a Codeforces page using the existing CPOS theme variables (contributed by [@Tanishq216](https://github.com/Tanishq216), #8).
+
+### Fixed
+- **Statement HTML is sanitized** before rendering and the webview CSP is tightened (script/style/font limited to the MathJax CDN) (#8).
+- **Windows file paths** — sample/problem metadata filenames are normalized (lowercased on Windows) before hashing so they resolve consistently across drives (#8).
+- **Single scrollbar** — `html`/`body` no longer scroll; only the statement content area scrolls, removing the clashing double scrollbar.
+- Removed the redundant "standard input / standard output" rows from the rendered statement, keeping the time and memory limits.
+
+## Browser companion (Chrome) — 0.6.14 - 2026-06-06
+
+### Added
+- **Statement capture** — captures the problem statement HTML from Codeforces (extracting original TeX from MathJax 2 `math/tex` scripts) and CSES (reverting KaTeX spans to raw TeX) and sends it to the VS Code panel (contributed by [@Tanishq216](https://github.com/Tanishq216), #8).
+
+### Fixed
+- **Submit tab explosion** — submit polling now reuses the same browser tab via tracked tab IDs and gives up after a bounded number of attempts (acking the queue) instead of spawning duplicate tabs forever (#8).
+
+## Browser companion (Firefox) — 0.0.2 - 2026-06-06
+
+### Added
+- **Statement capture** — ports the Codeforces/CSES statement capture to the Firefox companion so the VS Code Statement tab works on Firefox too, stripping the CSES sample I/O and KaTeX loader tags.
+
+### Fixed
+- **Submit tab explosion** — submit polling reuses the same tab via tracked tab IDs and stops after a bounded number of attempts, matching the Chrome companion.
 
 ---
 

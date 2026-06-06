@@ -99,8 +99,20 @@ function bringTabToFront(tabId) {
     void Promise.race([task, sleep(400)]).catch(() => undefined);
 }
 
-async function findOrOpenTab(url) {
+async function findOrOpenTab(url, knownTabId = null) {
     if (!url) return null;
+
+    if (knownTabId != null) {
+        try {
+            const tab = await browser.tabs.get(knownTabId);
+            if (tab?.id != null) {
+                bringTabToFront(tab.id);
+                return tab;
+            }
+        } catch {
+            /* tab closed, fall through */
+        }
+    }
 
     const tabs = await browser.tabs.query({});
     const match = tabs.find((t) => t.url && urlsMatch(t.url, url));
@@ -413,9 +425,10 @@ function cfSubmitFlags(pending) {
     return { submitByIndex, problemIndex, problemCode };
 }
 
-async function handleCodeforces(pending, _endpoint) {
-    const tab = await findOrOpenTab(pending.submitUrl);
+async function handleCodeforces(pending, _endpoint, key, activeTabIds) {
+    const tab = await findOrOpenTab(pending.submitUrl, activeTabIds.get(key));
     if (!tab?.id) return false;
+    activeTabIds.set(key, tab.id);
 
     const languageId = CF_LANGUAGE_IDS[pending.language] ?? null;
     const { submitByIndex, problemIndex, problemCode } = cfSubmitFlags(pending);
@@ -454,9 +467,10 @@ async function handleCodeforces(pending, _endpoint) {
     return false;
 }
 
-async function handleCses(pending, _endpoint) {
-    const tab = await findOrOpenTab(pending.submitUrl);
+async function handleCses(pending, _endpoint, key, activeTabIds) {
+    const tab = await findOrOpenTab(pending.submitUrl, activeTabIds.get(key));
     if (!tab?.id) return false;
+    activeTabIds.set(key, tab.id);
 
     const results = await browser.scripting.executeScript({
         target: { tabId: tab.id, allFrames: false },
@@ -474,6 +488,9 @@ async function handleCses(pending, _endpoint) {
     return ok;
 }
 
+const attemptCounts = new Map();
+const activeTabIds = new Map();
+
 async function pollOnce() {
     if (handling) return;
     const found = await fetchPending();
@@ -483,13 +500,22 @@ async function pollOnce() {
     try {
         const { data: pending } = found;
         const platform = String(pending.platform || '').toLowerCase();
+        const key = pending.submitUrl || pending.code.substring(0, 50);
+        const attempts = (attemptCounts.get(key) || 0) + 1;
+        attemptCounts.set(key, attempts);
+
         let ok = false;
         if (platform === 'codeforces' || platform === 'cf') {
-            ok = await handleCodeforces(pending, found.endpoint);
+            ok = await handleCodeforces(pending, found.endpoint, key, activeTabIds);
         } else if (platform === 'cses') {
-            ok = await handleCses(pending, found.endpoint);
+            ok = await handleCses(pending, found.endpoint, key, activeTabIds);
         }
-        if (ok) void ack(found.endpoint);
+
+        if (ok || attempts >= 15) {
+            void ack(found.endpoint);
+            attemptCounts.delete(key);
+            activeTabIds.delete(key);
+        }
     } finally {
         handling = false;
     }

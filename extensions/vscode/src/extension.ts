@@ -1453,14 +1453,26 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   }
 
   * { box-sizing: border-box; }
+  html {
+    height: 100%;
+    overflow: hidden;
+  }
   body {
     margin: 0;
     padding: var(--pad) 10px;
+    height: 100%;
+    overflow: hidden;
     color: var(--fg);
     background: var(--bg);
     font-family: var(--mono);
     font-size: var(--fontsize);
     line-height: 1.5;
+  }
+  #app {
+    height: calc(100vh - (var(--pad) * 2));
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
   .link { color: var(--accent); cursor: pointer; }
   .link:hover { text-decoration: underline; }
@@ -1801,19 +1813,147 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     line-height: 1.6;
     border-style: dashed;
   }
-  .tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid var(--border-soft); }
+  .tabs { flex: 0 0 auto; display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid var(--border-soft); }
   .tab { padding: 6px 12px; border: none; background: transparent; color: var(--dim); cursor: pointer; border-bottom: 2px solid transparent; font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
   .tab.active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 700; }
   .tab:hover:not(.active) { color: var(--fg); }
-  .statement-view { font-family: var(--vscode-font-family, sans-serif); font-size: 13px; line-height: 1.6; padding: 4px 4px 20px 4px; color: var(--fg); }
-  .statement-view pre { background: var(--input-bg); padding: 8px; border-radius: 4px; border: 1px solid var(--border-soft); overflow-x: auto; font-family: var(--mono); font-size: 12px; margin: 8px 0; }
-  .statement-view code { font-family: var(--mono); background: var(--highlight); padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
-  .statement-view h1, .statement-view h2, .statement-view h3 { margin-top: 1.5em; margin-bottom: 0.5em; color: var(--fg); border-bottom: 1px solid var(--border-soft); padding-bottom: 4px; }
-  .statement-view p { margin: 8px 0; }
-  .statement-view ul, .statement-view ol { padding-left: 20px; margin: 8px 0; }
-  .statement-view .property-title { font-weight: bold; }
+  .statement-view {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 20px 8px 28px 8px;
+    color: var(--fg);
+    font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .statement-view pre {
+    background: var(--input-bg);
+    padding: 10px 12px;
+    border: 1px solid var(--border-soft);
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12px;
+    margin: 10px 0;
+  }
+  .statement-view code {
+    font-family: var(--mono);
+    background: var(--highlight);
+    padding: 1px 4px;
+    font-size: 0.9em;
+  }
+  .statement-view h1, .statement-view h2, .statement-view h3 {
+    margin-top: 1.4em;
+    margin-bottom: 0.55em;
+    color: var(--fg);
+    font-weight: 700;
+  }
+  .statement-view p { margin: 11px 0; }
+  .statement-view ul, .statement-view ol { padding-left: 22px; margin: 10px 0; }
+  .statement-view .property-title { font-weight: 700; }
   .statement-view .math { display: inline-block; }
-  .statement-view-wrapper { overflow-y: auto; overflow-x: hidden; max-height: calc(100vh - 80px); }
+  .statement-view .header {
+    text-align: center;
+    margin: 0 auto 22px auto;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .statement-view .header .title {
+    font-size: 22px;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--fg);
+    margin-bottom: 10px;
+  }
+  .statement-view .time-limit,
+  .statement-view .memory-limit {
+    display: inline-flex;
+    gap: 4px;
+    align-items: baseline;
+    margin: 2px 10px;
+    color: var(--dim);
+    font-size: 12px;
+  }
+  .statement-view .time-limit .property-title,
+  .statement-view .memory-limit .property-title {
+    color: var(--fg);
+    font-weight: 700;
+  }
+  .statement-view .input-specification,
+  .statement-view .output-specification,
+  .statement-view .note,
+  .statement-view .sample-tests {
+    margin: 24px 0 0 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+  .statement-view .input-specification .section-title,
+  .statement-view .output-specification .section-title,
+  .statement-view .note .section-title,
+  .statement-view .sample-tests .section-title,
+  .statement-view .input-specification > div:first-child,
+  .statement-view .output-specification > div:first-child,
+  .statement-view .note > div:first-child {
+    display: block;
+    margin: 0 0 8px 0;
+    padding-bottom: 5px;
+    color: var(--fg);
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .statement-view .input-specification p:last-child,
+  .statement-view .output-specification p:last-child,
+  .statement-view .note p:last-child {
+    margin-bottom: 0;
+  }
+  /* CSES statement normalization — match the Codeforces layout */
+  .statement-view .cses-title {
+    text-align: center;
+    font-size: 22px;
+    line-height: 1.25;
+    font-weight: 700;
+    color: var(--fg);
+    margin: 0 auto 10px auto;
+    padding: 0;
+    border: none;
+  }
+  .statement-view .task-constraints {
+    list-style: none;
+    text-align: center;
+    margin: 0 auto 22px auto;
+    padding: 0 0 16px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .statement-view .task-constraints li {
+    display: inline-block;
+    margin: 2px 10px;
+    color: var(--dim);
+    font-size: 12px;
+  }
+  .statement-view .task-constraints li b {
+    color: var(--fg);
+    font-weight: 700;
+  }
+  .statement-view .md h1 {
+    margin: 24px 0 8px 0;
+    padding-bottom: 5px;
+    color: var(--fg);
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+  .statement-view-wrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+  }
 </style>
 </head>
 <body>
@@ -2378,10 +2518,23 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   function sanitizeHtml(html) {
     if (!html) return "";
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const blockedTags = ["script", "iframe", "object", "embed", "link"];
+    const blockedTags = ["script", "iframe", "object", "embed", "link", "style"];
     blockedTags.forEach(tag => {
       doc.querySelectorAll(tag).forEach(e => e.remove());
     });
+    doc.querySelectorAll(".input-file, .output-file").forEach(e => e.remove());
+    // CSES: drop the trailing "Example" section (sample I/O) so it does not
+    // duplicate the Tests tab. It is the #example heading plus everything that
+    // follows it in the same container. #example exists only on CSES pages.
+    const example = doc.querySelector("#example");
+    if (example) {
+      let node = example;
+      while (node) {
+        const next = node.nextSibling;
+        if (node.parentNode) node.parentNode.removeChild(node);
+        node = next;
+      }
+    }
     doc.querySelectorAll("*").forEach(e => {
       Array.from(e.attributes).forEach(attr => {
         if (attr.name.toLowerCase().startsWith("on")) {
@@ -2393,7 +2546,14 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   }
 
   function statementSection() {
-    return '<div class="statement-view-wrapper"><div class="statement-view">' + sanitizeHtml(state.meta.statementHtml) + '</div></div>';
+    let inner = sanitizeHtml(state.meta.statementHtml);
+    // CSES captures have no title element; prepend the problem name so the
+    // layout matches the Codeforces statement (centered title at the top).
+    const isCses = String(state.meta.platform || "").toLowerCase() === "cses";
+    if (isCses && state.meta.name) {
+      inner = '<h1 class="cses-title">' + esc(state.meta.name) + '</h1>' + inner;
+    }
+    return '<div class="statement-view-wrapper"><div class="statement-view">' + inner + '</div></div>';
   }
 
   function render() {

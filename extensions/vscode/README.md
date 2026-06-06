@@ -34,6 +34,7 @@ Part of the **CPOS** project — works with the [terminal app](https://github.co
 
 Open the **CPOS** view in the activity bar:
 
+- **Tests / Statement tabs** — switch between the sample tests and the captured problem statement (rendered natively with MathJax) without leaving the editor
 - **Run All** — compile and run every sample; verdicts shown inline (`AC`, `WA`, `TLE`, `RE`, `CE`)
 - **Submit** — queue submission and autofill the judge page in your logged-in browser
 - **Problem** — open the problem statement

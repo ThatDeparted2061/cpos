@@ -2,7 +2,7 @@
 
 Firefox build of the CPOS browser companion for Codeforces and CSES. It mirrors the Chrome companion: capture public samples, sync CSES progress, and autofill judge submit pages through the local CPOS endpoints.
 
-**Current version:** 0.0.1 (see [CHANGELOG.md](../../CHANGELOG.md)).
+**Current version:** 0.0.2 (see [CHANGELOG.md](../../CHANGELOG.md)).
 
 ## Install From Source
 

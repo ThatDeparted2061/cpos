@@ -453,7 +453,6 @@ async function pollOnce() {
   try {
     const { data: pending } = found;
     const platform = String(pending.platform || "").toLowerCase();
-    
     const key = pending.submitUrl || pending.code.substring(0, 50);
     const attempts = (attemptCounts.get(key) || 0) + 1;
     attemptCounts.set(key, attempts);
@@ -464,7 +463,7 @@ async function pollOnce() {
     } else if (platform === "cses") {
       ok = await handleCses(pending, found.endpoint, key, activeTabIds);
     }
-    
+
     if (ok || attempts >= 15) {
       void ack(found.endpoint);
       attemptCounts.delete(key);

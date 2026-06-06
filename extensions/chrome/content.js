@@ -256,8 +256,9 @@
         const clone = statement.cloneNode(true);
         const sampleTests = clone.querySelector(".sample-tests");
         if (sampleTests) sampleTests.remove();
+        clone.querySelectorAll(".input-file, .output-file").forEach(el => el.remove());
         clone.querySelectorAll(".MathJax_Preview, .MathJax, mjx-container, .mjx-chtml, .MathJax_CHTML").forEach(el => el.remove());
-        
+
         clone.querySelectorAll("script[type^='math/tex']").forEach(el => {
           const isBlock = el.getAttribute("type").includes("mode=display");
           const tex = el.textContent;
@@ -286,6 +287,18 @@
             el.textContent = isDisplay ? `$$${annotation.textContent}$$` : `\\(${annotation.textContent}\\)`;
           }
         });
+        // Drop KaTeX loader tags and the trailing "Example" section (the
+        // sample input/output is shown in the Tests tab, not the statement).
+        clone.querySelectorAll("link, script, style").forEach(el => el.remove());
+        const example = clone.querySelector("#example");
+        if (example) {
+          let node = example;
+          while (node) {
+            const next = node.nextSibling;
+            node.remove();
+            node = next;
+          }
+        }
         statementHtml = clone.outerHTML;
       }
     } else {
