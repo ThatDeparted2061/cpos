@@ -1338,11 +1338,11 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-webview-resource: https: data:; script-src 'nonce-${nonce}' 'unsafe-eval' https://cdn.jsdelivr.net https://polyfill.io; style-src 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${this.view!.webview.cspSource} https: data:; script-src 'nonce-${nonce}' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script nonce="${nonce}">
   window.MathJax = {
-    tex: { inlineMath: [['$$', '$$'], ['\\\\(', '\\\\)']] },
+    tex: { inlineMath: [['\\\\(', '\\\\)']], displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']] },
     svg: { fontCache: 'global' },
     startup: { typeset: false }
   };
@@ -2375,8 +2375,25 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       + '</div>';
   }
 
+  function sanitizeHtml(html) {
+    if (!html) return "";
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const blockedTags = ["script", "iframe", "object", "embed", "link"];
+    blockedTags.forEach(tag => {
+      doc.querySelectorAll(tag).forEach(e => e.remove());
+    });
+    doc.querySelectorAll("*").forEach(e => {
+      Array.from(e.attributes).forEach(attr => {
+        if (attr.name.toLowerCase().startsWith("on")) {
+          e.removeAttribute(attr.name);
+        }
+      });
+    });
+    return doc.body.innerHTML;
+  }
+
   function statementSection() {
-    return '<div class="statement-view-wrapper"><div class="statement-view">' + state.meta.statementHtml + '</div></div>';
+    return '<div class="statement-view-wrapper"><div class="statement-view">' + sanitizeHtml(state.meta.statementHtml) + '</div></div>';
   }
 
   function render() {
