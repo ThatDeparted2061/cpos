@@ -5,7 +5,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.3 | `Cargo.toml` |
-| VS Code extension | 0.3.24 | `extensions/vscode/package.json` |
+| VS Code extension | 0.3.25 | `extensions/vscode/package.json` |
 | Browser companion (Chrome) | 0.6.14 | `extensions/chrome/manifest.json` |
 | Browser companion (Firefox) | 0.0.2 | `extensions/firefox/manifest.json` |
 
@@ -17,6 +17,14 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Firefox browser companion source build in `extensions/firefox`, with temporary add-on install instructions and XPI packaging for self-signing or future AMO distribution.
 
 ---
+
+## VS Code extension — 0.3.25 - 2026-06-06
+
+### Added
+- **Sponsor button** in the panel header — links to GitHub Sponsors to help keep CPOS free and local-first.
+
+### Changed
+- The header **GitHub** button is now icon-only to make room for the Sponsor button without crowding the toolbar.
 
 ## VS Code extension — 0.3.24 - 2026-06-06
 

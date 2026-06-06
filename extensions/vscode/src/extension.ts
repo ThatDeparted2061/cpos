@@ -1525,6 +1525,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     color: #f0f6fc;
   }
   .iconbtn.gh:hover { background: #161b22; border-color: #484f58; color: #fff; }
+  .iconbtn.icononly { padding: 4px; justify-content: center; }
   .iconbtn.sponsor {
     background: color-mix(in srgb, #db61a2 18%, transparent);
     border-color: color-mix(in srgb, #db61a2 46%, var(--border));
@@ -2414,7 +2415,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       + '<span class="headtools">'
       + '<button class="iconbtn search" data-act="searchProblem" title="Search editorials on Google"' + searchDisabled + '>Search</button>'
       + '<button class="iconbtn sponsor" data-act="openSponsor" title="Sponsor CPOS — keep it free and local-first">' + HEART_ICON + 'Sponsor</button>'
-      + '<button class="iconbtn gh" data-act="openGithub" title="CPOS on GitHub">' + GH_ICON + 'GitHub</button>'
+      + '<button class="iconbtn gh icononly" data-act="openGithub" title="CPOS on GitHub" aria-label="CPOS on GitHub">' + GH_ICON + '</button>'
       + '<button class="iconbtn theme" data-act="toggleThemes" title="Themes">◑ theme</button>'
       + '</span>'
       + '</div>'

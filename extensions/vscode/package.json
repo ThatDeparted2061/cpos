@@ -2,7 +2,7 @@
   "name": "cpos-vscode",
   "displayName": "CPOS",
   "description": "Capture Codeforces & CSES problems, run sample tests, and submit — all from VS Code.",
-  "version": "0.3.24",
+  "version": "0.3.25",
   "publisher": "sohamaggarwal",
   "license": "MIT",
   "icon": "media/icon128.png",
@@ -11,6 +11,9 @@
     "theme": "dark"
   },
   "homepage": "https://github.com/Soham109/cpos",
+  "sponsor": {
+    "url": "https://github.com/sponsors/Soham109"
+  },
   "bugs": {
     "url": "https://github.com/Soham109/cpos/issues"
   },
