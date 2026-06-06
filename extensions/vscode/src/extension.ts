@@ -1199,6 +1199,10 @@ async function openGithub(): Promise<void> {
   await vscode.env.openExternal(vscode.Uri.parse("https://github.com/Soham109/cpos"));
 }
 
+async function openSponsor(): Promise<void> {
+  await vscode.env.openExternal(vscode.Uri.parse("https://github.com/sponsors/Soham109"));
+}
+
 type PanelState = {
   source?: string;
   fileName: string;
@@ -1287,6 +1291,9 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
         break;
       case "openGithub":
         await openGithub();
+        break;
+      case "openSponsor":
+        await openSponsor();
         break;
       case "retryServer":
         await startCaptureServer().catch((error) => warnServer(error));
@@ -1518,6 +1525,17 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     color: #f0f6fc;
   }
   .iconbtn.gh:hover { background: #161b22; border-color: #484f58; color: #fff; }
+  .iconbtn.sponsor {
+    background: color-mix(in srgb, #db61a2 18%, transparent);
+    border-color: color-mix(in srgb, #db61a2 46%, var(--border));
+    color: #f08fc0;
+  }
+  .iconbtn.sponsor svg { color: #db61a2; }
+  .iconbtn.sponsor:hover {
+    background: color-mix(in srgb, #db61a2 30%, transparent);
+    border-color: #db61a2;
+    color: #fbcfe5;
+  }
   .iconbtn.search {
     background: color-mix(in srgb, var(--cf) 16%, transparent);
     border-color: color-mix(in srgb, var(--cf) 42%, var(--border));
@@ -1961,6 +1979,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}">
   const CPOS_LOGO = ${JSON.stringify(logoUri)};
   const GH_ICON = '<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.18.82.63-.18 1.31-.27 1.98-.27.67 0 1.35.09 1.98.27 1.51-1.04 2.18-.82 2.18-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
+  const HEART_ICON = '<svg aria-hidden="true" viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 14.25.345 6.595a3.75 3.75 0 1 1 5.305-5.305L8 3.64l2.35-2.35a3.75 3.75 0 1 1 5.305 5.305L8 14.25z"/></svg>';
   const vscode = acquireVsCodeApi();
   let state = { tests: [], results: [], source: null };
   let renderedSource = undefined;
@@ -2394,6 +2413,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       + '<span class="brandrow"><img class="logo" src="' + CPOS_LOGO + '" alt="CPOS" /><span class="title">CPOS</span></span>'
       + '<span class="headtools">'
       + '<button class="iconbtn search" data-act="searchProblem" title="Search editorials on Google"' + searchDisabled + '>Search</button>'
+      + '<button class="iconbtn sponsor" data-act="openSponsor" title="Sponsor CPOS — keep it free and local-first">' + HEART_ICON + 'Sponsor</button>'
       + '<button class="iconbtn gh" data-act="openGithub" title="CPOS on GitHub">' + GH_ICON + 'GitHub</button>'
       + '<button class="iconbtn theme" data-act="toggleThemes" title="Themes">◑ theme</button>'
       + '</span>'

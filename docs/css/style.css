@@ -16,6 +16,8 @@
   --accent: #c4b5fd;
   --accent-2: #a7f3d0;
   --accent-3: #fde68a;
+  --sponsor: #f472b6;
+  --sponsor-strong: #db61a2;
   --danger: #fb7185;
   --btn-bg: #f4f7f8;
   --btn-bg-hover: #ffffff;
@@ -48,6 +50,8 @@
   --accent: #7c6fbd;
   --accent-2: #059669;
   --accent-3: #a16207;
+  --sponsor: #d6336c;
+  --sponsor-strong: #bf3989;
   --danger: #e11d48;
   --btn-bg: #10151b;
   --btn-bg-hover: #000000;
@@ -251,6 +255,16 @@ code {
   height: 15px;
 }
 
+.nav-sponsor svg {
+  width: 15px;
+  height: 15px;
+  color: var(--sponsor);
+}
+
+.nav-sponsor:hover svg {
+  color: var(--sponsor-strong);
+}
+
 .nav-cta {
   color: var(--on-accent);
   background: var(--btn-bg);
@@ -403,6 +417,20 @@ code {
 .btn-secondary:hover {
   background: var(--btn-bg-hover);
   border-color: var(--btn-bg-hover);
+}
+
+.btn-sponsor {
+  color: #ffffff;
+  background: var(--sponsor-strong);
+  border-color: var(--sponsor-strong);
+}
+
+.btn-sponsor:hover {
+  opacity: 0.92;
+}
+
+.btn-sponsor svg {
+  color: #ffe3f1;
 }
 
 /* Hero */
@@ -1147,5 +1175,99 @@ code {
 
   .btn-copy {
     width: 100%;
+  }
+}
+
+/* Footer */
+
+.site-foot {
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.foot-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 48px;
+  padding-top: 56px;
+  padding-bottom: 40px;
+}
+
+.foot-support h2 {
+  font-family: var(--display);
+  font-size: 1.85rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 8px 0 12px;
+}
+
+.foot-support p {
+  color: var(--muted);
+  max-width: 46ch;
+  margin: 0;
+}
+
+.foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.foot-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-content: start;
+  justify-self: end;
+}
+
+.foot-links a {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: color 0.16s ease;
+}
+
+.foot-links a:hover {
+  color: var(--text);
+}
+
+.foot-base {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 20px;
+  padding-bottom: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.foot-logo span {
+  font-family: var(--display);
+  font-weight: 800;
+}
+
+.foot-fine {
+  color: var(--dim);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 760px) {
+  .foot-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    padding-top: 44px;
+  }
+
+  .foot-links {
+    justify-self: start;
+  }
+
+  .foot-base {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 }
