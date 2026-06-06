@@ -117,6 +117,7 @@
       fontSize: "12.5px",
       lineHeight: "1.45",
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+      whiteSpace: "pre-wrap",
       boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
       opacity: "0",
       transform: "translateY(6px)",
@@ -238,6 +239,7 @@
     let id;
     let name;
     let url;
+    let statementHtml;
 
     if (location.hostname === "codeforces.com") {
       platform = "codeforces";
@@ -249,6 +251,14 @@
       url = pageUrl;
       const title = document.querySelector(".problem-statement .title") || document.querySelector(".title");
       name = title ? title.textContent.replace(/^[A-Z]\d*\.\s*/, "").trim() : id;
+      const statement = document.querySelector(".problem-statement");
+      if (statement) {
+        const clone = statement.cloneNode(true);
+        const sampleTests = clone.querySelector(".sample-tests");
+        if (sampleTests) sampleTests.remove();
+        clone.querySelectorAll(".MathJax_Preview, .MathJax, mjx-container, .mjx-chtml, .MathJax_CHTML").forEach(el => el.remove());
+        statementHtml = clone.outerHTML;
+      }
     } else if (location.hostname === "cses.fi") {
       platform = "cses";
       const match = pageUrl.match(/task\/(\d+)/);
@@ -257,6 +267,19 @@
       url = `https://cses.fi/problemset/task/${id}/`;
       const h1 = document.querySelector(".title-block h1, .content h1, h1");
       name = h1 ? h1.textContent.trim() : id;
+      const content = document.querySelector(".content");
+      if (content) {
+        const clone = content.cloneNode(true);
+        // CSES uses KaTeX. Revert KaTeX rendered spans back to raw TeX.
+        clone.querySelectorAll(".math").forEach(el => {
+          const annotation = el.querySelector("annotation");
+          if (annotation && annotation.textContent) {
+            const isDisplay = el.classList.contains("math-display");
+            el.textContent = isDisplay ? `$$${annotation.textContent}$$` : `\\(${annotation.textContent}\\)`;
+          }
+        });
+        statementHtml = clone.outerHTML;
+      }
     } else {
       return null;
     }
@@ -286,7 +309,7 @@
       }
     }
 
-    return { platform, id, name, url, tests };
+    return { platform, id, name, url, tests, statementHtml };
   }
 
   const CF_LANGUAGE_IDS = {
@@ -1165,7 +1188,15 @@
           payload.tests.length > 0
             ? `${payload.tests.length} sample(s) → ${synced.join(", ")}`
             : synced.join(", ");
-        toast(`CPOS · captured ${payload.id} (${payload.name}) · ${detail}`, true);
+        
+        let debugMsg = `CPOS Capture Debug:
+• ID: ${payload.id || 'N/A'}
+• Name: ${payload.name || 'N/A'}
+• URL: ${payload.url || 'N/A'}
+• Tests Count: ${payload.tests ? payload.tests.length : 0}
+• Has Statement HTML: ${payload.statementHtml ? 'Yes (' + payload.statementHtml.length + ' chars)' : 'No'}
+`;
+        toast(debugMsg + `\nStatus: ${detail}`, true);
       } else {
         toast("CPOS not running. Open VS Code with CPOS, or start the CPOS TUI.", false);
       }

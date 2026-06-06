@@ -442,7 +442,10 @@ async function pollOnce() {
     } else if (platform === "cses") {
       ok = await handleCses(pending, found.endpoint);
     }
-    if (ok) void ack(found.endpoint);
+    
+    // Always acknowledge (clear) the pending submit, even if it failed.
+    // If it fails (e.g. user is logged out), we don't want to retry infinitely and open 25 tabs!
+    void ack(found.endpoint);
   } finally {
     handling = false;
   }

@@ -14,6 +14,7 @@ type CapturedProblem = {
   tags?: string[];
   category?: string;
   tests?: TestCase[];
+  statementHtml?: string;
 };
 
 type CsesProgress = {
@@ -346,6 +347,7 @@ async function captureProblem(problem: CapturedProblem): Promise<ProblemMeta> {
     rating: problem.rating,
     tags: problem.tags,
     category: problem.category,
+    statementHtml: problem.statementHtml,
     solutionPath,
     capturedAt: new Date().toISOString()
   };
@@ -710,6 +712,7 @@ async function saveCsesSlugLookup(meta: ProblemMeta): Promise<void> {
     rating: meta.rating,
     tags: meta.tags,
     category: meta.category,
+    statementHtml: meta.statementHtml,
     capturedAt: meta.capturedAt
   };
   await fs.writeFile(file, JSON.stringify(lookup, null, 2), "utf8");
@@ -786,8 +789,13 @@ async function saveSamples(solutionPath: string, tests: TestCase[]): Promise<voi
   }
 }
 
+function hashPath(p: string): string {
+  const norm = process.platform === "win32" ? p.toLowerCase() : p;
+  return Buffer.from(norm).toString("base64url");
+}
+
 function samplePathFor(solutionPath: string): string {
-  return path.join(dataDir(), "samples", `${Buffer.from(solutionPath).toString("base64url")}.json`);
+  return path.join(dataDir(), "samples", `${hashPath(solutionPath)}.json`);
 }
 
 async function saveProblemMeta(meta: ProblemMeta): Promise<void> {
@@ -814,7 +822,12 @@ async function loadProblemMetaForFile(source: string): Promise<ProblemMeta | und
     return JSON.parse(raw) as ProblemMeta;
   } catch {
     const fallback = await loadProblemMeta();
-    if (fallback?.solutionPath === source) return fallback;
+    if (fallback) {
+      const match = process.platform === "win32"
+        ? fallback.solutionPath.toLowerCase() === source.toLowerCase()
+        : fallback.solutionPath === source;
+      if (match) return fallback;
+    }
     const inferred = inferProblemMetaFromPath(source);
     if (inferred) return inferred;
     return loadCsesMetaBySlug(path.parse(source).name, source);
@@ -822,7 +835,7 @@ async function loadProblemMetaForFile(source: string): Promise<ProblemMeta | und
 }
 
 function problemMetaPathFor(solutionPath: string): string {
-  return path.join(dataDir(), "problems", `${Buffer.from(solutionPath).toString("base64url")}.json`);
+  return path.join(dataDir(), "problems", `${hashPath(solutionPath)}.json`);
 }
 
 // Best-effort guess for files that were not created by a capture. We only use
@@ -1324,7 +1337,16 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src vscode-webview-resource: https: data:; script-src 'nonce-${nonce}' 'unsafe-eval' https://cdn.jsdelivr.net https://polyfill.io; style-src 'unsafe-inline' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script nonce="${nonce}">
+  window.MathJax = {
+    tex: { inlineMath: [['$$', '$$'], ['\\\\(', '\\\\)']] },
+    svg: { fontCache: 'global' },
+    startup: { typeset: false }
+  };
+</script>
+<script async nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 <style>
   :root {
     --mono: var(--vscode-editor-font-family, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
@@ -1778,6 +1800,19 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     line-height: 1.6;
     border-style: dashed;
   }
+  .tabs { display: flex; gap: 4px; margin-bottom: 10px; border-bottom: 1px solid var(--border-soft); }
+  .tab { padding: 6px 12px; border: none; background: transparent; color: var(--dim); cursor: pointer; border-bottom: 2px solid transparent; font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.05em; }
+  .tab.active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 700; }
+  .tab:hover:not(.active) { color: var(--fg); }
+  .statement-view { font-family: var(--vscode-font-family, sans-serif); font-size: 13px; line-height: 1.6; padding: 4px 4px 20px 4px; color: var(--fg); }
+  .statement-view pre { background: var(--input-bg); padding: 8px; border-radius: 4px; border: 1px solid var(--border-soft); overflow-x: auto; font-family: var(--mono); font-size: 12px; margin: 8px 0; }
+  .statement-view code { font-family: var(--mono); background: var(--highlight); padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
+  .statement-view h1, .statement-view h2, .statement-view h3 { margin-top: 1.5em; margin-bottom: 0.5em; color: var(--fg); border-bottom: 1px solid var(--border-soft); padding-bottom: 4px; }
+  .statement-view p { margin: 8px 0; }
+  .statement-view ul, .statement-view ol { padding-left: 20px; margin: 8px 0; }
+  .statement-view .property-title { font-weight: bold; }
+  .statement-view .math { display: inline-block; }
+  .statement-view-wrapper { overflow-y: auto; overflow-x: hidden; max-height: calc(100vh - 80px); }
 </style>
 </head>
 <body>
@@ -1790,12 +1825,13 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   let renderedSource = undefined;
   const saved = vscode.getState() || {};
   let theme = saved.theme || 'cpos';
+  let activeTab = saved.activeTab || 'tests';
   let themesOpen = false;
   let ioSplit = typeof saved.ioSplit === 'number' ? saved.ioSplit : 68;
   document.body.setAttribute('data-theme', theme);
 
   function persistUiState() {
-    vscode.setState(Object.assign({}, vscode.getState(), { theme, ioSplit }));
+    vscode.setState(Object.assign({}, vscode.getState(), { theme, ioSplit, activeTab }));
   }
 
   function applyIoSplit(pct) {
@@ -2330,9 +2366,27 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       + '<button class="ghost" data-act="addTest">+ add</button></div>' + body;
   }
 
+  function tabsHtml() {
+    if (!state.meta || !state.meta.statementHtml) return '';
+    return '<div class="tabs">'
+      + '<button class="tab ' + (activeTab === "tests" ? "active" : "") + '" data-act="setTab" data-tab="tests">Tests</button>'
+      + '<button class="tab ' + (activeTab === "statement" ? "active" : "") + '" data-act="setTab" data-tab="statement">Statement</button>'
+      + '</div>';
+  }
+
+  function statementSection() {
+    return '<div class="statement-view-wrapper"><div class="statement-view">' + state.meta.statementHtml + '</div></div>';
+  }
+
   function render() {
     const app = document.getElementById("app");
-    app.innerHTML = header() + statbar() + actions() + testsSection();
+    let body = "";
+    if (activeTab === "statement" && state.meta && state.meta.statementHtml) {
+      body = statementSection();
+    } else {
+      body = statbar() + actions() + testsSection();
+    }
+    app.innerHTML = header() + tabsHtml() + body;
     renderedSource = state.source;
     bind();
     applyIoSplit(ioSplit);
@@ -2342,6 +2396,10 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       bindIoHover(card);
     });
     autoResizeTextareas(app);
+
+    if (activeTab === "statement" && window.MathJax && typeof window.MathJax.typesetPromise === "function") {
+      window.MathJax.typesetPromise([app.querySelector('.statement-view')]).catch(function(){});
+    }
   }
 
   // Update verdicts/results without wiping in-progress textarea edits (same file).
@@ -2411,6 +2469,12 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
           state.tests.splice(Number(idx), 1);
           state.results = [];
           send("persistTests", { tests: state.tests.slice() });
+          render();
+          return;
+        }
+        if (act === "setTab") {
+          activeTab = el.getAttribute("data-tab");
+          persistUiState();
           render();
           return;
         }
