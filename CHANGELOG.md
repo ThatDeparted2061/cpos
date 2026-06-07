@@ -4,7 +4,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 
 | Component | Current version | Version file |
 | --- | --- | --- |
-| Terminal app | 0.1.3 | `Cargo.toml` |
+| Terminal app | 0.1.4 | `Cargo.toml` |
 | VS Code extension | 0.3.26 | `extensions/vscode/package.json` |
 | Browser companion (Chrome) | 0.6.14 | `extensions/chrome/manifest.json` |
 | Browser companion (Firefox) | 0.0.2 | `extensions/firefox/manifest.json` |
@@ -15,6 +15,18 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Firefox browser companion source build in `extensions/firefox`, with temporary add-on install instructions and XPI packaging for self-signing or future AMO distribution.
+
+---
+
+## Terminal app — 0.1.4 - 2026-06-07
+
+### Fixed
+- **Windows: opening a problem now works.** Pressing **`o`** (or Enter) in the TUI was a no-op on Windows — the statement never opened in the browser, so the CPOS browser companion never captured the samples (surfacing as "couldn't fetch cases"). The OS-integration layer was hardcoded to the macOS `open` command, which doesn't exist on Windows. Opening a URL/file now uses `cmd /C start` on Windows (`open` on macOS, `xdg-open` on Linux).
+- **Windows: the solution file now opens in your editor with your template.** Editor auto-detection ran `command -v` through `sh`, which fails to find VS Code's `code.cmd` shim on Windows, so the templated file was created but never opened. Detection now uses `where` on Windows, and `code`/`cursor` are launched via `cmd /C` (custom editor commands run through `cmd /C` instead of `sh -c`).
+- **Windows: "open in browser" (`b`) and the CSES login shortcut (`o`) in setup** now open correctly for the same reason.
+- **Clipboard on submit** now uses the platform-native tool (`clip` on Windows, `pbcopy` on macOS, `xclip` on Linux) instead of always shelling out to the macOS-only `pbcopy`.
+
+> macOS behavior is unchanged — every integration point branches by OS and keeps the exact commands it used before.
 
 ---
 

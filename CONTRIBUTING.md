@@ -8,7 +8,7 @@ For how the pieces fit together, see [ARCHITECTURE.md](ARCHITECTURE.md). Release
 
 | Component | Current version |
 | --- | --- |
-| Terminal app | 0.1.3 (`Cargo.toml`) |
+| Terminal app | 0.1.4 (`Cargo.toml`) |
 | VS Code extension | 0.3.22 (`extensions/vscode/package.json`) |
 | Browser companion (Chrome) | 0.6.13 (`extensions/chrome/manifest.json`) |
 | Browser companion (Firefox) | 0.0.1 (`extensions/firefox/manifest.json`) |

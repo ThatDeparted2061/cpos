@@ -26,6 +26,27 @@ use anyhow::Result;
 use crate::data::config::Config;
 use crate::data::models::{Platform, Problem, SolveStatus, TestCase};
 
+/// Open a URL or file path with the OS default handler (browser, file viewer),
+/// cross-platform. On Windows the statement opens in the user's default browser,
+/// which is where the CPOS companion captures sample tests from.
+pub fn os_open(target: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        // `start` is a cmd builtin; the empty "" is the (required) window title.
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", target])
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(target).spawn();
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(target).spawn();
+    }
+}
+
 /// Expand a leading `~/` to the user's home directory.
 pub fn expand_tilde(s: &str) -> PathBuf {
     if let Some(rest) = s.strip_prefix("~/") {

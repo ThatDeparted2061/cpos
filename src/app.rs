@@ -771,7 +771,7 @@ impl App {
 
     pub fn open_selected_problem(&self) {
         if let Some(p) = self.selected_problem() {
-            let _ = std::process::Command::new("open").arg(&p.url).spawn();
+            workspace::os_open(&p.url);
         }
     }
 

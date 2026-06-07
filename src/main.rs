@@ -598,14 +598,52 @@ fn submit_selected(app: &mut App) {
 }
 
 fn open_url(url: &str) {
-    let _ = std::process::Command::new("open").arg(url).spawn();
+    workspace::os_open(url);
+}
+
+/// Run a shell command line, discarding output. Uses `cmd /C` on Windows and
+/// `sh -c` elsewhere so custom editor commands work on every platform.
+fn run_shell(cmd: &str) -> bool {
+    use std::process::Stdio;
+    let mut command = if cfg!(target_os = "windows") {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", cmd]);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.arg("-c").arg(cmd);
+        c
+    };
+    command
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .is_ok()
+}
+
+/// Launch an editor binary (e.g. `code`, `cursor`) on a file. On Windows these
+/// are `.cmd` shims that `Command` can't spawn directly, so we go through `cmd`.
+fn run_editor(editor_cmd: &str, path: &Path) -> bool {
+    use std::process::Stdio;
+    let mut command = std::process::Command::new(if cfg!(target_os = "windows") {
+        "cmd"
+    } else {
+        editor_cmd
+    });
+    if cfg!(target_os = "windows") {
+        command.arg("/C").arg(editor_cmd);
+    }
+    command
+        .arg(path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .is_ok()
 }
 
 /// Open a file in the user's editor. Auto-detects Cursor/VS Code when no
 /// working custom command is configured, then falls back to the OS default.
 fn open_in_editor(editor: Option<&str>, path: &Path) {
-    use std::process::Stdio;
-
     if let Some(tmpl) = editor.filter(|s| !s.trim().is_empty()) {
         let cmd = if tmpl.contains("{file}") {
             tmpl.replace("{file}", &path.to_string_lossy())
@@ -613,50 +651,57 @@ fn open_in_editor(editor: Option<&str>, path: &Path) {
             format!("{tmpl} {}", path.to_string_lossy())
         };
         if let Some(program) = cmd.split_whitespace().next() {
-            if command_exists(program)
-                && std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(&cmd)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-                    .is_ok()
-            {
+            if command_exists(program) && run_shell(&cmd) {
                 return;
             }
         }
     }
 
     for editor_cmd in ["cursor", "code"] {
-        if command_exists(editor_cmd)
-            && std::process::Command::new(editor_cmd)
-                .arg(path)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .is_ok()
-        {
+        if command_exists(editor_cmd) && run_editor(editor_cmd, path) {
             return;
         }
     }
-    let _ = std::process::Command::new("open").arg(path).spawn();
+    workspace::os_open(&path.to_string_lossy());
 }
 
 fn command_exists(name: &str) -> bool {
-    std::process::Command::new("sh")
-        .arg("-c")
-        .arg(format!("command -v {name} >/dev/null 2>&1"))
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    use std::process::Stdio;
+    if cfg!(target_os = "windows") {
+        std::process::Command::new("where")
+            .arg(name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    } else {
+        std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("command -v {name} >/dev/null 2>&1"))
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
 }
 
-/// Copy text to the macOS clipboard via `pbcopy`.
+/// Copy text to the system clipboard (`clip` on Windows, `pbcopy` on macOS,
+/// `xclip` on Linux).
 fn copy_to_clipboard(text: &str) -> bool {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    let child = Command::new("pbcopy").stdin(Stdio::piped()).spawn();
+    let mut command = if cfg!(target_os = "windows") {
+        Command::new("clip")
+    } else if cfg!(target_os = "macos") {
+        Command::new("pbcopy")
+    } else {
+        let mut c = Command::new("xclip");
+        c.args(["-selection", "clipboard"]);
+        c
+    };
+
+    let child = command.stdin(Stdio::piped()).spawn();
     let mut child = match child {
         Ok(c) => c,
         Err(_) => return false,
@@ -910,7 +955,7 @@ fn setup_browser_command() -> Result<()> {
     std::fs::write(&setup_path, setup_html)?;
 
     // Open the setup page
-    let _ = std::process::Command::new("open").arg(&setup_path).spawn();
+    workspace::os_open(&setup_path.to_string_lossy());
 
     eprintln!("Browser companion files written to:");
     eprintln!("  {}", dir.display());
