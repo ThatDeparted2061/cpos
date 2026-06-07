@@ -4,7 +4,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 
 | Component | Current version | Version file |
 | --- | --- | --- |
-| Terminal app | 0.1.4 | `Cargo.toml` |
+| Terminal app | 0.1.5 | `Cargo.toml` |
 | VS Code extension | 0.3.26 | `extensions/vscode/package.json` |
 | Browser companion (Chrome) | 0.6.14 | `extensions/chrome/manifest.json` |
 | Browser companion (Firefox) | 0.0.2 | `extensions/firefox/manifest.json` |
@@ -15,6 +15,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Firefox browser companion source build in `extensions/firefox`, with temporary add-on install instructions and XPI packaging for self-signing or future AMO distribution.
+
+---
+
+## Terminal app — 0.1.5 - 2026-06-07
+
+### Fixed
+- **Windows: `cpos update` failed for Scoop installs** with `failed to run scoop: program not found`. On Windows `scoop` is a `.cmd`/`.ps1` shim, which `CreateProcess` can't launch directly (it only resolves `.exe`). The updater now runs Scoop through `cmd /C` so the shim resolves via `PATHEXT`, and refreshes buckets (`scoop update`) before upgrading `cpos`.
 
 ---
 

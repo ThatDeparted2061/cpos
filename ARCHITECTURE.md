@@ -2,7 +2,7 @@
 
 CPOS is three local clients plus a static website. Nothing runs in the cloud; the browser extension and desktop apps communicate only over `127.0.0.1`.
 
-**Current releases:** terminal app 0.1.4 · VS Code extension 0.3.26 · browser companion 0.6.14 (see [CHANGELOG.md](CHANGELOG.md)).
+**Current releases:** terminal app 0.1.5 · VS Code extension 0.3.26 · browser companion 0.6.14 (see [CHANGELOG.md](CHANGELOG.md)).
 
 ```
 ┌─────────────────┐     capture / submit      ┌──────────────────┐

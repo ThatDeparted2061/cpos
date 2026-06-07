@@ -370,7 +370,22 @@ fn homebrew_update() -> Result<()> {
 
 fn scoop_update() -> Result<()> {
     eprintln!("Detected Scoop install.");
-    run_command("scoop", &["update", "cpos"]).context("failed to update CPOS with Scoop")
+    // Refresh buckets first so the newest cpos manifest is visible, then upgrade.
+    run_scoop(&["update"]).context("failed to refresh Scoop buckets")?;
+    run_scoop(&["update", "cpos"]).context("failed to update CPOS with Scoop")
+}
+
+/// Run the `scoop` command. On Windows `scoop` is a `.cmd`/`.ps1` shim that
+/// `CreateProcess` can't launch directly (it only resolves `.exe`), so it must
+/// go through `cmd /C`, which honours `PATHEXT`.
+fn run_scoop(args: &[&str]) -> Result<()> {
+    if cfg!(windows) {
+        let mut full = vec!["/C", "scoop"];
+        full.extend_from_slice(args);
+        run_command("cmd", &full)
+    } else {
+        run_command("scoop", args)
+    }
 }
 
 fn binary_update(exe: &Path) -> Result<()> {
