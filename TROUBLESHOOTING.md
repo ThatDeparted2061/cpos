@@ -46,6 +46,12 @@ If something isn’t listed here, open a [GitHub issue](https://github.com/Soham
 
 **Fix:** Update to VS Code extension **0.3.23+**.
 
+### Windows: Run All always shows `(no output)`
+
+**What it means:** VS Code had newer unsaved code in the editor, but CPOS compiled the older saved file on disk. This could make every sample look like it had no output, even when the current editor contents should print output or fail compilation.
+
+**Fix:** Update to VS Code extension **0.3.27+**. On Windows, Run All now saves the matching dirty solution file before compiling. macOS/Linux behavior is unchanged.
+
 ### All platforms
 
 - **CE in the panel** = the toolchain ran but the build failed — read stderr in the test row or CPOS output.

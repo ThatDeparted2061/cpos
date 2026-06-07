@@ -5,7 +5,7 @@ All notable changes to CPOS are documented here. Components are versioned indepe
 | Component | Current version | Version file |
 | --- | --- | --- |
 | Terminal app | 0.1.6 | `Cargo.toml` |
-| VS Code extension | 0.3.26 | `extensions/vscode/package.json` |
+| VS Code extension | 0.3.27 | `extensions/vscode/package.json` |
 | Browser companion (Chrome) | 0.6.14 | `extensions/chrome/manifest.json` |
 | Browser companion (Firefox) | 0.0.2 | `extensions/firefox/manifest.json` |
 
@@ -15,6 +15,13 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Firefox browser companion source build in `extensions/firefox`, with temporary add-on install instructions and XPI packaging for self-signing or future AMO distribution.
+
+---
+
+## VS Code extension - 0.3.27 - 2026-06-07
+
+### Fixed
+- **Windows Run All stale-buffer fix** - before compiling samples on Windows, CPOS now saves the matching dirty solution document. This prevents Run All from compiling an older saved starter file while the editor contains newer code, which surfaced as every sample showing "no output" even when the current buffer had output or compilation errors. macOS/Linux behavior is unchanged.
 
 ---
 

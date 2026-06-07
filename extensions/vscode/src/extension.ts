@@ -927,6 +927,10 @@ async function runTests(indices?: number[]): Promise<void> {
     vscode.window.showWarningMessage("Open a solution file or capture a problem first.");
     return;
   }
+  if (process.platform === "win32" && !(await saveOpenSolutionDocument(source))) {
+    vscode.window.showWarningMessage("CPOS: save the solution file before running samples.");
+    return;
+  }
 
   const tests = await loadSamples(source);
   if (tests.length === 0) {
@@ -1002,6 +1006,20 @@ async function runTests(indices?: number[]): Promise<void> {
     refreshActions();
     vscode.window.showErrorMessage(`CPOS run failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+async function saveOpenSolutionDocument(source: string): Promise<boolean> {
+  const document = vscode.workspace.textDocuments.find(
+    (doc) => doc.uri.scheme === "file" && sameFilePath(doc.uri.fsPath, source)
+  );
+  if (!document?.isDirty) return true;
+  return document.save();
+}
+
+function sameFilePath(left: string, right: string): boolean {
+  const a = path.normalize(left);
+  const b = path.normalize(right);
+  return process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 function evaluate(index: number, test: TestCase, result: { code: number; stdout: string; stderr: string; timedOut: boolean; timeMs: number }): RunResult {
