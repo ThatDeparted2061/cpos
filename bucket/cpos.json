@@ -1,12 +1,12 @@
 {
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Competitive Programming Operating System terminal app",
   "homepage": "https://github.com/Soham109/cpos",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/Soham109/cpos/releases/download/v0.1.3/cpos-x86_64-pc-windows-msvc.zip",
-      "hash": "d5616866ce6cfabe9922c62b56ce0df67e92724b9b052c2980dbce200b3045ad"
+      "url": "https://github.com/Soham109/cpos/releases/download/v0.1.4/cpos-x86_64-pc-windows-msvc.zip",
+      "hash": "dacb396975a09dac9213ef9bb6d713c85c8be18d8f813819c55db558b88e3c47"
     }
   },
   "bin": "cpos.exe",
