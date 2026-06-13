@@ -2842,6 +2842,14 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       + '<button class="ghost" data-act="addTest">+ add</button></div>' + body;
   }
 
+  // The full Tests-tab body, wrapped in a scroll region so it stays scrollable
+  // inside the fixed-height #app (header + tabs are pinned, the rest scrolls).
+  function testsView() {
+    return '<div class="tests-wrapper">'
+      + statbar() + actions() + testsSection()
+      + '</div>';
+  }
+
   function tabsHtml() {
     if (!state.meta) return '';
     const tabs = [{ id: 'tests', label: 'Tests' }];
@@ -3031,10 +3039,10 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
       } else if (activeTab === "solution" && state.meta && !state.solutionBlocked) {
         body = solutionSection();
       } else {
-        body = statbar() + actions() + testsSection();
+        body = testsView();
       }
     } catch (err) {
-      try { body = statbar() + actions() + testsSection(); }
+      try { body = testsView(); }
       catch (_) { body = ""; }
       body = '<div class="box" style="border-color:var(--err,#c33);color:var(--dim);font-size:11px;padding:10px;margin-bottom:8px">'
         + 'The "' + esc(activeTab) + '" view failed to render: ' + esc(String(err && err.message ? err.message : err))
