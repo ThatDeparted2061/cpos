@@ -1896,6 +1896,18 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     color: var(--dim);
   }
 
+  /* Tests tab scroll region: keeps the panel chrome (header + tabs) fixed while
+     the test list scrolls, mirroring .statement-view-wrapper / .sol-wrapper.
+     Without this the Tests view (default tab) overflows the clipped #app and
+     becomes unscrollable. */
+  .tests-wrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 6px;
+  }
+
   .test { margin-bottom: 6px; overflow: hidden; }
   .test.pass { border-color: color-mix(in srgb, var(--ok) 45%, var(--border)); }
   .test.fail { border-color: color-mix(in srgb, var(--bad) 45%, var(--border)); }
