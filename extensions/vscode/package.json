@@ -1,7 +1,7 @@
 {
   "name": "cpos-vscode",
   "displayName": "CPOS",
-  "description": "Capture Codeforces, CSES & AtCoder problems, run sample tests, and submit — all from VS Code.",
+  "description": "Capture Codeforces, CSES, AtCoder & CodeChef problems, run sample tests, and submit — all from VS Code.",
   "version": "0.5.1",
   "publisher": "sohamaggarwal",
   "license": "MIT",
@@ -22,6 +22,7 @@
     "codeforces",
     "cses",
     "atcoder",
+    "codechef",
     "cpc",
     "contests",
     "algorithm"
@@ -112,7 +113,7 @@
         "cpos.subfolderPerPlatform": {
           "type": "boolean",
           "default": false,
-          "description": "Group captured files into codeforces/, cses/ and atcoder/ subfolders. Off by default so files drop straight into your project."
+          "description": "Group captured files into codeforces/, cses/, atcoder/ and codechef/ subfolders. Off by default so files drop straight into your project."
         },
         "cpos.defaultLanguage": {
           "type": "string",

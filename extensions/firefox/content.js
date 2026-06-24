@@ -332,6 +332,14 @@
       id = match[2];
       url = `https://atcoder.jp/contests/${match[1]}/tasks/${id}`;
       name = atcoderTitle() || id;
+    } else if (location.hostname.endsWith("codechef.com")) {
+      platform = "codechef";
+      const match = pageUrl.match(/\/problems\/([^/?#]+)/);
+      if (!match) return null;
+      id = match[1];
+      url = `https://www.codechef.com/problems/${id}`;
+      const h = document.querySelector("h1, .problem-name, #problem-code");
+      name = (h && h.textContent.trim()) || id;
     } else {
       return null;
     }
@@ -377,6 +385,9 @@
       for (let i = 0; i < Math.min(ins.length, outs.length); i++) {
         tests.push({ input: ins[i], expected_output: outs[i] });
       }
+    } else if (platform === "codechef") {
+      // CodeChef statements are React-rendered, so reliable samples come from
+      // the practice API on the CPOS side — we just send id/name/url here.
     } else {
       // CSES: examples are consecutive <pre> blocks inside the statement content.
       const scope = document.querySelector(".content") || document;
