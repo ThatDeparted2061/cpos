@@ -688,8 +688,9 @@ async function captureProblem(problem: CapturedProblem): Promise<{ meta: Problem
 
   let tests = problem.tests ?? [];
   let statementHtml = problem.statementHtml;
-  // AtCoder samples/statement aren't reliably scraped in the browser, so fetch
-  // them here from the task page (static and authoritative) so capture lands
+  // AtCoder/CodeChef statements are React-rendered or otherwise hard to scrape
+  // in the browser, so the companion may send no samples (and never the
+  // statement). Fetch them here from the judge's own API/page so capture lands
   // working sample tests and a readable statement.
   if (problem.platform.toLowerCase() === "atcoder") {
     // The task page is static and reliable, so treat server-parsed samples as
@@ -701,6 +702,9 @@ async function captureProblem(problem: CapturedProblem): Promise<{ meta: Problem
       if (s.length > 0) tests = s;
       if (!statementHtml) statementHtml = extractAtcoderStatement(page);
     }
+  } else if (tests.length === 0) {
+    const fetched = await fetchPlatformSamples(problem);
+    if (fetched.length > 0) tests = fetched;
   }
   await saveSamples(solutionPath, tests);
   runResults.delete(solutionPath);
@@ -740,6 +744,44 @@ function activeEditorFilePath(): string | undefined {
   const editor = vscode.window.activeTextEditor;
   if (editor?.document.uri.scheme === "file") return editor.document.uri.fsPath;
   return undefined;
+}
+
+// Best-effort sample retrieval for judges whose pages the browser companion
+// can't reliably scrape. Returns [] on any failure so capture never breaks.
+async function fetchPlatformSamples(problem: CapturedProblem): Promise<TestCase[]> {
+  const platform = problem.platform.toLowerCase();
+  try {
+    if (platform === "codechef") return await fetchCodechefSamples(problem.id);
+  } catch (error) {
+    OUTPUT.appendLine(`Could not fetch ${platform} samples: ${String(error)}`);
+  }
+  return [];
+}
+
+// CodeChef ships structured samples in its practice API
+// (problemComponents.sampleTestCases). Fall back to <pre> pairs in the HTML body.
+async function fetchCodechefSamples(code: string): Promise<TestCase[]> {
+  const res = await fetch(`https://www.codechef.com/api/contests/PRACTICE/problems/${encodeURIComponent(code)}`, {
+    headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" }
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as {
+    problemComponents?: { sampleTestCases?: Array<{ input?: string; output?: string; isDeleted?: boolean }> };
+    body?: string;
+  };
+  const structured = data.problemComponents?.sampleTestCases;
+  if (Array.isArray(structured) && structured.length > 0) {
+    const tests: TestCase[] = [];
+    for (const tc of structured) {
+      if (tc.isDeleted) continue;
+      const input = normalizeSample(tc.input ?? "");
+      const expected = normalizeSample(tc.output ?? "");
+      if (input || expected) tests.push({ input, expected_output: expected });
+    }
+    if (tests.length > 0) return tests;
+  }
+  if (typeof data.body === "string") return parsePreTagPairs(data.body);
+  return [];
 }
 
 // Fetch the AtCoder task page once; both samples and the statement are parsed
@@ -833,6 +875,18 @@ function parseAtcoderSamples(html: string): TestCase[] {
   const tests: TestCase[] = [];
   for (let i = 0; i < Math.min(ins.length, outs.length); i++) {
     tests.push({ input: ins[i], expected_output: outs[i] });
+  }
+  return tests;
+}
+
+// Generic fallback: pair consecutive <pre> blocks two-by-two (input, output).
+function parsePreTagPairs(html: string): TestCase[] {
+  const pres = [...html.matchAll(/<pre\b[^>]*>([\s\S]*?)<\/pre>/gi)]
+    .map((m) => normalizeSample(decodeEntities(stripTags(m[1]))))
+    .filter((s) => s.length > 0);
+  const tests: TestCase[] = [];
+  for (let i = 0; i + 1 < pres.length; i += 2) {
+    tests.push({ input: pres[i], expected_output: pres[i + 1] });
   }
   return tests;
 }
@@ -1284,6 +1338,7 @@ function platformSlug(platform: string): string {
   if (lower === "codeforces" || lower === "cf") return "codeforces";
   if (lower === "cses") return "cses";
   if (lower === "atcoder") return "atcoder";
+  if (lower === "codechef") return "codechef";
   return lower.replace(/[^a-z0-9_-]/g, "_") || "problems";
 }
 
@@ -1395,6 +1450,7 @@ function inferProblemMetaFromPath(source: string): ProblemMeta | undefined {
   if (parent === "codeforces" || parent === "cf") platform = "codeforces";
   else if (parent === "cses") platform = "cses";
   else if (parent === "atcoder") platform = "atcoder";
+  else if (parent === "codechef") platform = "codechef";
   else if (/^\d+[A-Za-z]\d*$/.test(id)) platform = "codeforces";
 
   if (!platform) return undefined;
@@ -1409,7 +1465,7 @@ function inferProblemMetaFromPath(source: string): ProblemMeta | undefined {
   else if (platform === "atcoder") {
     const prefix = id.match(/^([a-z0-9]+)_/i);
     url = prefix ? `https://atcoder.jp/contests/${prefix[1]}/tasks/${id}` : undefined;
-  }
+  } else if (platform === "codechef") url = `https://www.codechef.com/problems/${id}`;
   if (!url) return undefined;
 
   return {
@@ -1739,6 +1795,9 @@ function submitUrlFor(meta: ProblemMeta): string | undefined {
     if (!at) return undefined;
     return `https://atcoder.jp/contests/${at.contest}/submit?taskScreenName=${encodeURIComponent(at.task)}`;
   }
+  if (platform === "codechef") {
+    return `https://www.codechef.com/submit/${encodeURIComponent(meta.id)}`;
+  }
   return undefined;
 }
 
@@ -1941,6 +2000,8 @@ function platformDisplayName(platform: string): string {
       return "CSES";
     case "atcoder":
       return "AtCoder";
+    case "codechef":
+      return "CodeChef";
     default:
       return platform;
   }
@@ -1956,6 +2017,9 @@ function buildSolutionQuery(meta: ProblemMeta): string {
   }
   if (platform === "atcoder") {
     return `atcoder ${meta.id} ${meta.name} editorial solution`;
+  }
+  if (platform === "codechef") {
+    return `codechef ${meta.id} ${meta.name} editorial solution`;
   }
   return `${meta.id} ${meta.name} editorial solution`;
 }
@@ -2507,6 +2571,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
   .tag.codeforces { color: var(--cf); border-color: var(--border); }
   .tag.cses { color: var(--ok); border-color: var(--border); }
   .tag.atcoder { color: #b9c0c9; border-color: var(--border); }
+  .tag.codechef { color: #c9986a; border-color: var(--border); }
   .pid { font-weight: 700; font-size: 14px; color: var(--fg); }
   .problem-link {
     border: none;
@@ -3643,6 +3708,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     if (k === "codeforces" || k === "cf") return "codeforces";
     if (k === "cses") return "cses";
     if (k === "atcoder") return "atcoder";
+    if (k === "codechef") return "codechef";
     return "";
   }
 
@@ -3660,7 +3726,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
         + '<div class="pname">' + esc(m.name) + '</div>';
     } else {
       problemBlock = '<div class="pline"><span class="pid muted">no problem linked</span></div>'
-        + '<div class="pname">open a Codeforces, CSES or AtCoder problem in your browser to capture it</div>';
+        + '<div class="pname">open a Codeforces, CSES, AtCoder or CodeChef problem in your browser to capture it</div>';
     }
     const file = state.fileName
       ? '<span class="link" data-act="openSource">' + esc(state.fileName) + '</span>'
@@ -3887,10 +3953,10 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
 
   function statementSection() {
     let inner = sanitizeHtml(state.meta.statementHtml);
-    // Codeforces statements already carry their own title; CSES/AtCoder
+    // Codeforces statements already carry their own title; CSES/AtCoder/CodeChef
     // captured statements do not, so prepend the problem name as a heading.
     const platLower = String(state.meta.platform || "").toLowerCase();
-    const needsTitle = platLower === "cses" || platLower === "atcoder";
+    const needsTitle = platLower === "cses" || platLower === "atcoder" || platLower === "codechef";
     if (needsTitle && state.meta.name && inner) {
       inner = '<h1 class="cses-title">' + esc(state.meta.name) + '</h1>' + inner;
     }
@@ -3985,6 +4051,7 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     const platLabel = plat === 'codeforces' || plat === 'cf' ? 'Codeforces'
       : plat === 'cses' ? 'CSES'
       : plat === 'atcoder' ? 'AtCoder'
+      : plat === 'codechef' ? 'CodeChef'
       : '';
     const prefix = platLabel ? platLabel + ' ' : '';
     const ytQ = encodeURIComponent(prefix + pid + ' ' + pname + ' editorial solution');
@@ -4004,6 +4071,10 @@ class CposActionsProvider implements vscode.WebviewViewProvider {
     if (plat === 'atcoder') {
       linkDefs.push({ icon: '◉', label: 'AtCoder problem page', href: m.url });
       linkDefs.push({ icon: '◉', label: 'AtCoder editorial', href: m.url + '/editorial' });
+    }
+    if (plat === 'codechef') {
+      linkDefs.push({ icon: '◉', label: 'CodeChef problem page', href: m.url });
+      linkDefs.push({ icon: '◉', label: 'CodeChef discussion', href: 'https://discuss.codechef.com/search?q=' + encodeURIComponent(pid) });
     }
     if (plat === 'cses') {
       linkDefs.push({ icon: '◉', label: 'CSES problem page', href: m.url });
